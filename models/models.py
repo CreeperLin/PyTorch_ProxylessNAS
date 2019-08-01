@@ -5,14 +5,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import genotypes as gt
-from models.layers import DAGLayer, PreprocLayer, MergeFilterLayer,\
-                        DARTSMixedOp, BinGateMixedOp
-from models.defs import ConcatMerger, SumMerger, LastMerger,\
-                        CombinationEnumerator, LastNEnumerator,\
-                        SplitAllocator, ReplicateAllocator
+from models.layers import DAGLayer
 
 class ProxylessNASNet(nn.Module):
-    def __init__(self, config, ops):
+    def __init__(self, config, net_kwargs):
         super().__init__()
         self.chn_in = config.channel_in
         self.chn = config.channel_init
@@ -25,53 +21,18 @@ class ProxylessNASNet(nn.Module):
 
         chn_cur = self.chn * config.channel_multiplier
         self.conv_first = nn.Sequential(
-            nn.Conv2d(self.chn_in, chn_cur//2, 3, 1, 2),
-            nn.BatchNorm2d(chn_cur//2),
-            nn.ReLU(),
-            nn.Conv2d(chn_cur//2, chn_cur, 3, 1, 2),
-            nn.BatchNorm2d(chn_cur),
-            # nn.Conv2d(self.chn_in, chn_cur, 3, 1, 1),
+            # nn.Conv2d(self.chn_in, chn_cur//2, 3, 1, 2),
+            # nn.BatchNorm2d(chn_cur//2),
+            # nn.ReLU(),
+            # nn.Conv2d(chn_cur//2, chn_cur, 3, 1, 2),
             # nn.BatchNorm2d(chn_cur),
+            nn.Conv2d(self.chn_in, chn_cur, 3, 1, 1),
+            nn.BatchNorm2d(chn_cur),
         )
 
         chn_in, chn_cur = chn_cur, self.chn
 
-        layer_kwargs = {
-            'config': config,
-            'n_nodes': self.n_nodes,
-            'chn_in': (chn_in, ) * self.n_inputs_layer,
-            'shared_a': False,
-            'allocator': ReplicateAllocator(),
-            'merger_state': SumMerger(),
-            'merger_out': ConcatMerger(),
-            'enumerator': CombinationEnumerator(),
-            'preproc': PreprocLayer,
-            'aggregate': None,
-            'edge_cls': BinGateMixedOp,
-            'edge_kwargs': {
-                'config': config,
-                'chn_in': (chn_cur, ) * self.n_inputs_node,
-                'stride': 1,
-                'ops': ops,
-            },
-        }
-
-        kwargs = {
-            'config': config,
-            'n_nodes': self.n_layers,
-            'chn_in': (chn_in, ) * self.n_inputs_model,
-            'shared_a': False,
-            'allocator': ReplicateAllocator(),
-            'merger_state': SumMerger(),
-            'merger_out': LastMerger(),
-            'enumerator': LastNEnumerator(),
-            'preproc': None,
-            'aggregate': None,
-            'edge_cls': DAGLayer,
-            'edge_kwargs': layer_kwargs
-        }
-
-        self.dag_layers = DAGLayer(**kwargs)
+        self.dag_layers = DAGLayer(**net_kwargs)
         
         self.conv_last = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
@@ -102,7 +63,7 @@ class ProxylessNASNet(nn.Module):
 
 
 class DARTSLikeNet(nn.Module):
-    def __init__(self, config, ops):
+    def __init__(self, config, net_kwargs):
         super().__init__()
         self.chn_in = config.channel_in
         self.chn = config.channel_init
@@ -119,44 +80,7 @@ class DARTSLikeNet(nn.Module):
             nn.BatchNorm2d(chn_cur),
         )
 
-        chn_in, chn_cur = chn_cur, self.chn
-
-        layer_kwargs = {
-            'config': config,
-            'n_nodes': self.n_nodes,
-            'chn_in': (chn_in, ) * self.n_inputs_layer,
-            'shared_a': False,
-            'allocator': ReplicateAllocator(),
-            'merger_state': SumMerger(),
-            'merger_out': ConcatMerger(),
-            'enumerator': CombinationEnumerator(),
-            'preproc': PreprocLayer,
-            'aggregate': None,
-            'edge_cls': DARTSMixedOp,
-            'edge_kwargs': {
-                'config': config,
-                'chn_in': (chn_cur, ) * self.n_inputs_node,
-                'stride': 1,
-                'ops': ops,
-            },
-        }
-
-        kwargs = {
-            'config': config,
-            'n_nodes': self.n_layers,
-            'chn_in': (chn_in, ) * self.n_inputs_model,
-            'shared_a': True,
-            'allocator': ReplicateAllocator(),
-            'merger_state': SumMerger(),
-            'merger_out': LastMerger(),
-            'enumerator': LastNEnumerator(),
-            'preproc': None,
-            'aggregate': None,
-            'edge_cls': DAGLayer,
-            'edge_kwargs': layer_kwargs
-        }
-
-        self.dag_layers = DAGLayer(**kwargs)
+        self.dag_layers = DAGLayer(**net_kwargs)
         
         self.conv_last = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
@@ -187,7 +111,7 @@ class DARTSLikeNet(nn.Module):
 
 
 class NASController(nn.Module):
-    def __init__(self, config, net, criterion, ops=gt.PRIMITIVES_DEFAULT, device_ids=None):
+    def __init__(self, config, criterion, ops, device_ids=None, net=None, net_kwargs={}):
         super().__init__()
         self.n_nodes = config.nodes
         self.criterion = criterion
@@ -195,7 +119,7 @@ class NASController(nn.Module):
             device_ids = list(range(torch.cuda.device_count()))
         self.device_ids = device_ids
         self.ops = ops
-        self.net = net(config, self.ops)
+        self.net = net(config, net_kwargs)
 
         # initialize architect parameters: alphas
         self.alpha = nn.Parameter(1e-3*torch.randn(self.net.alphas_shape()))

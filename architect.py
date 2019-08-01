@@ -134,7 +134,6 @@ class BinaryGateArchitect():
         # self.net.freeze(self.n_samples, self.net.alphas())
 
         # calc unrolled loss
-        # loss = self.net.criterion(self.net.forward(val_X, self.n_samples), val_y)
         a_optim.zero_grad()
         loss = self.net.loss(val_X, val_y)
 

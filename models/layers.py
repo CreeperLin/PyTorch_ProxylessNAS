@@ -7,6 +7,8 @@ import models.ops
 import genotypes as gt
 from utils import param_size
 
+edge_id = 0
+
 class ProxylessNASLossLayer(nn.Module):
     def __init__(self, w_lat):
         super(ProxylessNASLossLayer, self).__init__()
@@ -53,6 +55,9 @@ class DAGLayer(nn.Module):
                     allocator, merger_state, merger_out, enumerator, preproc, aggregate,
                     edge_cls, edge_kwargs):
         super().__init__()
+        global edge_id
+        self.edge_id = edge_id
+        edge_id+=1
         self.n_nodes = n_nodes
         self.n_input = len(chn_in)
         self.n_input_e = len(edge_kwargs['chn_in'])
@@ -195,7 +200,6 @@ class DARTSMixedOp(nn.Module):
             self._ops.append(op)
         self.alphas_shape = (len(ops), )
         self.chn_out = self.chn_in
-        # print('DARTSOp: {}'.format(param_size(self)))
     
     def forward(self, x, w_dag):
         if self.in_deg != 1:
@@ -209,6 +213,9 @@ class BinGateMixedOp(nn.Module):
     """ Mixed operation controlled by binary gate """
     def __init__(self, config, chn_in, stride, ops):
         super().__init__()
+        global edge_id
+        self.edge_id = edge_id
+        edge_id+=1
         self.in_deg = len(chn_in)
         assert self.in_deg == 1
         if self.in_deg == 1:
@@ -225,7 +232,6 @@ class BinGateMixedOp(nn.Module):
             self._ops.append(op)
         self.alphas_shape = (len(ops), )
         self.chn_out = self.chn_in
-        # print('BGMOp: {}'.format(param_size(self)))
     
     def forward(self, x, w_dag):
         if self.in_deg != 1:
@@ -233,12 +239,12 @@ class BinGateMixedOp(nn.Module):
         else:
             assert len(x) == 1
             x = x[0]
-        self.w_dag_f = w_dag
-        self.x_f = x
+        self.w_dag_f = w_dag.detach()
+        self.x_f = x.detach()
         if self.frozen:
             samples = self.samples_f 
         else:
-            samples = w_dag.multinomial(self.n_samples)
+            samples = w_dag.multinomial(self.n_samples).detach()
             self.swap_ops(samples)
         # print(gt.PRIMITIVES_DEFAULT[int(samples)])
         self.mout = sum((self._ops[i])(x) for i in samples)
@@ -260,24 +266,28 @@ class BinGateMixedOp(nn.Module):
     def freeze(self, freeze, w_dag=None, n_samples=2):
         self.frozen = freeze
         if freeze:
+            self.w_dag_f = w_dag.detach()
             self.samples_f = w_dag.multinomial(n_samples)
             self.swap_ops(self.samples_f)
             # print('frozen: {}'.format(self.samples_f))
     
     def alpha_grad(self, loss):
-        # print('mop grad: {}'.format(self.id))
-        samples = self.samples_f if self.frozen else range(len(self._ops))
-        a_grad = torch.zeros(self.alphas_shape).cuda()
-        # for j, op in enumerate(self._ops):
-        y_grad = torch.autograd.grad(loss, self.mout, retain_graph=True)[0]
-        for j in samples:
-            op = self._ops[j].to(device='cuda')
-            op_out = op(self.x_f)
-            op.to('cpu')
-            g_grad = torch.sum(torch.mul(y_grad, op_out))
-            for i in range(self.alphas_shape[0]):
-                kron = 1 if i==j else 0
-                a_grad[i] += g_grad * self.w_dag_f[j] * (kron - self.w_dag_f[i])
+        with torch.no_grad():
+            samples = self.samples_f if self.frozen else range(len(self._ops))
+            a_grad = torch.zeros(self.alphas_shape).cuda()
+            y_grad = (torch.autograd.grad(loss, self.mout, retain_graph=True)[0]).detach()
+            self.mout.detach_()
+            for j in samples:
+                op = self._ops[j].to(device='cuda')
+                op_out = op(self.x_f)
+                op_out.detach_()
+                op.to('cpu')
+                g_grad = torch.sum(torch.mul(y_grad, op_out))
+                g_grad.detach_()
+                for i in range(self.alphas_shape[0]):
+                    kron = 1 if i==j else 0
+                    a_grad[i] += g_grad * self.w_dag_f[j] * (kron - self.w_dag_f[i])
+            a_grad.detach_()
         return a_grad
     
     def mops(self):

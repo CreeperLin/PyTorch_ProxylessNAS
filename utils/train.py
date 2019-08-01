@@ -145,7 +145,6 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
 
     model.train()
     tr_ratio = len(train_loader) // len(valid_loader)
-    print(tr_ratio)
     val_iter = iter(valid_loader)
     for step, (trn_X, trn_y) in enumerate(train_loader):
         trn_X, trn_y = trn_X.to(device, non_blocking=True), trn_y.to(device, non_blocking=True)

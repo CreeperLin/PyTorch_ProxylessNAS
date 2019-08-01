@@ -11,7 +11,7 @@ import argparse
 from utils.train import search
 from utils.hparam import HParam
 from utils.model import get_model
-from utils import check_config, get_logger, get_writer, init_device
+from utils import check_config, get_logger, get_writer, init_device, param_size
 
 from dataset.dataloader import load_data
 import genotypes as gt
@@ -56,6 +56,8 @@ def main():
     print(gt.PRIMITIVES_DEFAULT)
 
     model = get_model(hp.model, dev, dev_list)
+    mb_params = param_size(model)
+    logger.info("Model size = {:.3f} MB".format(mb_params))
 
     search(out_dir, args.chkpt, train_data, None, model, writer, logger, dev, hp.train)
 
