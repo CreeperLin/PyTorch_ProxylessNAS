@@ -111,7 +111,7 @@ class DAGLayer(nn.Module):
         print('DAGLayer: {}'.format(param_size(self)))
         
 
-    def forward(self, x, w_dag):
+    def forward(self, x, w_dag, s_dag=None):
         if self.preprocs is None:
             states = [st for st in x]
         else:
@@ -123,9 +123,10 @@ class DAGLayer(nn.Module):
             eidx = 0
             for sidx in self.enumerator.enum(len(states), self.n_input_e):
                 w_edge = w_dag if self.shared_a else w_dag[widx+eidx]
+                s_edge = None if s_dag is None else (s_dag if self.shared_a else s_dag[widx+eidx])
                 res.append(edges[eidx](
                         self.allocator.alloc([states[i] for i in sidx], eidx, len(edges)),
-                        w_edge
+                        w_edge, s_edge
                     )
                 )
                 eidx += 1
@@ -201,7 +202,7 @@ class DARTSMixedOp(nn.Module):
         self.alphas_shape = (len(ops), )
         self.chn_out = self.chn_in
     
-    def forward(self, x, w_dag):
+    def forward(self, x, w_dag, s_dag=None):
         if self.in_deg != 1:
             x = torch.matmul(x, torch.sigmoid(self.agg_weight))
         else:
@@ -233,7 +234,7 @@ class BinGateMixedOp(nn.Module):
         self.alphas_shape = (len(ops), )
         self.chn_out = self.chn_in
     
-    def forward(self, x, w_dag):
+    def forward(self, x, w_dag, s_dag=None):
         if self.in_deg != 1:
             x = torch.matmul(x, torch.sigmoid(self.agg_weight))
         else:
@@ -242,12 +243,12 @@ class BinGateMixedOp(nn.Module):
         self.w_dag_f = w_dag.detach()
         self.x_f = x.detach()
         if self.frozen:
-            samples = self.samples_f 
+            smp = self.samples_f 
         else:
-            samples = w_dag.multinomial(self.n_samples).detach()
-            self.swap_ops(samples)
+            smp = w_dag.multinomial(self.n_samples).detach() if s_dag is None else s_dag.detach()
+            self.swap_ops(smp)
         # print(gt.PRIMITIVES_DEFAULT[int(samples)])
-        self.mout = sum((self._ops[i])(x) for i in samples)
+        self.mout = sum(self._ops[i](x) for i in smp)
         return self.mout
         # torch.cuda.empty_cache()
 

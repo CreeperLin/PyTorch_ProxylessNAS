@@ -7,6 +7,15 @@ import torch.nn.functional as F
 import genotypes as gt
 from models.layers import DAGLayer
 
+from torch.nn.parallel._functions import Broadcast
+
+def broadcast_list(l, device_ids):
+    """ Broadcasting list """
+    l_copies = Broadcast.apply(device_ids, *l)
+    l_copies = [l_copies[i:i+len(l)] for i in range(0, len(l_copies), len(l))]
+
+    return l_copies
+
 class ProxylessNASNet(nn.Module):
     def __init__(self, config, net_kwargs):
         super().__init__()
@@ -15,6 +24,7 @@ class ProxylessNASNet(nn.Module):
         self.n_classes = config.classes
         self.n_layers = config.layers
         self.n_nodes = config.nodes
+        self.n_samples = config.samples
         self.n_inputs_model = config.inputs_model
         self.n_inputs_layer = config.inputs_layer
         self.n_inputs_node = config.inputs_node
@@ -41,8 +51,10 @@ class ProxylessNASNet(nn.Module):
 
     
     def forward(self, x, w_dag):
+        w_dag.detach_()
         x = self.conv_first(x)
-        y = self.dag_layers((x, ) * self.n_inputs_model, w_dag)
+        s_dag = w_dag.detach().view(-1, w_dag.shape[-1]).multinomial(self.n_samples).view(w_dag.shape[:-1]).unsqueeze(-1)
+        y = self.dag_layers((x, ) * self.n_inputs_model, w_dag, s_dag)
         y = self.conv_last(y)
         y = y.view(y.size(0), -1) # flatten
         y = self.fc(y)
