@@ -13,7 +13,7 @@ import genotypes as gt
 from utils.profiling import profile_mem
 
 @profile_mem
-def get_model(config, device, dev_list):
+def get_proxyless_nas(config, device, dev_list):
     chn_in = config.channel_in
     chn = config.channel_init
     chn_cur = chn * config.channel_multiplier
@@ -57,7 +57,22 @@ def get_model(config, device, dev_list):
             },
         }
     }
+    criterion = nn.CrossEntropyLoss().to(device)
+    model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
+                        dev_list, ProxylessNASNet, proxyless_nas_kwargs).to(device)
+    return model
 
+def get_dartslike(config, device, dev_list):
+    chn_in = config.channel_in
+    chn = config.channel_init
+    chn_cur = chn * config.channel_multiplier
+    n_classes = config.classes
+    n_layers = config.layers
+    n_nodes = config.nodes
+    n_inputs_model = config.inputs_model
+    n_inputs_layer = config.inputs_layer
+    n_inputs_node = config.inputs_node
+    ops = gt.PRIMITIVES_DEFAULT
     darts_kwargs = {
         'config': config,
         'n_nodes': n_layers,
@@ -90,16 +105,20 @@ def get_model(config, device, dev_list):
             },
         }
     }
+    criterion = nn.CrossEntropyLoss().to(device)
+    model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
+                        dev_list, DARTSLikeNet, darts_kwargs).to(device)
+    return model
 
-    if config.type == 'proxyless-nas':
-        # criterion = ProxylessNASLossLayer(lat_model).to(device)
-        criterion = nn.CrossEntropyLoss().to(device)
-        model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
-                             dev_list, ProxylessNASNet, proxyless_nas_kwargs).to(device)
-    elif config.type == 'darts-no-reduce':
-        criterion = nn.CrossEntropyLoss().to(device)
-        model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
-                             dev_list, DARTSLikeNet, darts_kwargs).to(device)
+model_creator = {
+    'proxyless-nas': get_proxyless_nas,
+    'darts-no-reduce': get_dartslike,
+}
+
+def get_model(config, device, dev_list):
+    mtype = config.type
+    if mtype in model_creator:
+        return model_creator[mtype](config, device, dev_list)
     else:
         raise Exception("invalid model type")
     return model

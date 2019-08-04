@@ -85,11 +85,25 @@ class LastNEnumerator():
         return 1
 
 
+class N2OneEnumerator():
+    def __init__(self):
+        super().__init__()
+    
+    def enum(self, n_states, n_inputs):
+        yield [n_states-i-1 for i in range(n_states)]
+
+    def len_enum(self, n_states, n_inputs):
+        return 1
+
+
 class AllocatorBase():
     def __init__(self):
         pass
     
     def alloc(self, states, eidx, etot):
+        pass
+
+    def chn_in(self, chn_states, eidx, etot):
         pass
 
 
@@ -99,6 +113,20 @@ class SplitAllocator(AllocatorBase):
     
     def alloc(self, states, eidx, etot):
         return [s[s.shape[0]*eidx//etot : s.shape[0]*(eidx+1)//etot] for s in states]
+    
+    def chn_in(self, chn_states, eidx, etot):
+        return chn_states * eidx // etot
+
+
+class FracSplitAllocator(AllocatorBase):
+    def __init__(self):
+        super().__init__()
+    
+    def alloc(self, states, eidx, etot):
+        return states
+    
+    def chn_in(self, chn_states, eidx, etot):
+        return chn_states
 
 
 class ReplicateAllocator(AllocatorBase):
@@ -107,4 +135,7 @@ class ReplicateAllocator(AllocatorBase):
     
     def alloc(self, states, eidx, etot):
         return states
+    
+    def chn_in(self, chn_states, eidx, etot):
+        return chn_states
 

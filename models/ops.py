@@ -67,6 +67,7 @@ class MBConv(nn.Module):
         # self.activ = nn.ReLU6()
         # self.conv2 = nn.Conv2d(C_t, C_out, 1, 1, 1, bias=False)
         # self.bn2 = nn.BatchNorm2d(C_out, affine)
+        self.shortcut = nn.Identity()
         self.r = residual
 
     def forward(self, x):
@@ -75,7 +76,7 @@ class MBConv(nn.Module):
         # x = self.activ(x)
         # x = self.conv2(x)
         # x = self.bn2(x)
-        res = conv_x = self.net(x)
+        res = self.net(x)
 
         if self.r:
             skip_x = self.shortcut(x)

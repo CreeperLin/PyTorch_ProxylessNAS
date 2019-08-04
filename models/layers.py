@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import models.ops
 import genotypes as gt
 from utils import param_size
+from profile.profiler import tprof
 
 edge_id = 0
 
@@ -83,15 +84,16 @@ class DAGLayer(nn.Module):
         self.num_edges = 0
         for i in range(n_nodes):
             self.dag.append(nn.ModuleList())
-            num = 0
+            num_edges = self.enumerator.len_enum(self.n_input+i, self.n_input_e)
+            j = 0
             for sidx in self.enumerator.enum(self.n_input+i, self.n_input_e):
-                e_chn_in = [chn_states[s] for s in sidx]
+                e_chn_in = self.allocator.chn_in([chn_states[s] for s in sidx], j, num_edges)
                 edge_kwargs['chn_in'] = e_chn_in
                 e = edge_cls(**edge_kwargs)
                 self.dag[i].append(e)
                 self.edges.append(e)
-                num += 1
-            self.num_edges += num
+                j += 1
+            self.num_edges += num_edges
             chn_states.append(self.merger_state.chn_out([ei.chn_out for ei in self.dag[i]]))
         
         # print(self.dag)
@@ -228,6 +230,7 @@ class BinGateMixedOp(nn.Module):
         self.n_samples = config.samples
         self.samples_f = None
         self.frozen = False
+        self.w_lat = config.w_latency
         for primitive in ops:
             op = models.ops.OPS[primitive](self.chn_in, stride, affine=False)
             self._ops.append(op)
@@ -248,7 +251,11 @@ class BinGateMixedOp(nn.Module):
             smp = w_dag.multinomial(self.n_samples).detach() if s_dag is None else s_dag.detach()
             self.swap_ops(smp)
         # print(gt.PRIMITIVES_DEFAULT[int(samples)])
+        mid = str(self.edge_id) + '_' + str(int(smp[0]))
+        tprof.timer_start(mid)
         self.mout = sum(self._ops[i](x) for i in smp)
+        tprof.timer_stop(mid)
+        tprof.add_acc_item('model', mid)
         return self.mout
         # torch.cuda.empty_cache()
 
@@ -257,10 +264,12 @@ class BinGateMixedOp(nn.Module):
             if i in samples:
                 op.to(device='cuda')
                 for p in op.parameters():
+                    if not p.is_leaf: continue
                     p.requires_grad = True
             else:
                 op.to(device='cpu')
                 for p in op.parameters():
+                    if not p.is_leaf: continue
                     p.requires_grad = False
                     p.grad = None
 
@@ -285,9 +294,11 @@ class BinGateMixedOp(nn.Module):
                 op.to('cpu')
                 g_grad = torch.sum(torch.mul(y_grad, op_out))
                 g_grad.detach_()
+                mid = str(self.edge_id) + '_' + str(int(j))
+                lat_term = tprof.avg(mid) * self.w_lat
                 for i in range(self.alphas_shape[0]):
                     kron = 1 if i==j else 0
-                    a_grad[i] += g_grad * self.w_dag_f[j] * (kron - self.w_dag_f[i])
+                    a_grad[i] += (g_grad + lat_term) * self.w_dag_f[j] * (kron - self.w_dag_f[i])
             a_grad.detach_()
         return a_grad
     

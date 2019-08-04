@@ -6,13 +6,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import genotypes as gt
 from models.layers import DAGLayer
+from utils.profiling import profile_time
+from profile.profiler import tprof
 
 from torch.nn.parallel._functions import Broadcast
 
 def broadcast_list(l, device_ids):
     """ Broadcasting list """
-    l_copies = Broadcast.apply(device_ids, *l)
-    l_copies = [l_copies[i:i+len(l)] for i in range(0, len(l_copies), len(l))]
+    l_copies = Broadcast.apply(device_ids, l)
+    # l_copies = [l_copies[i:i+len(l)] for i in range(0, len(l_copies), len(l))]
 
     return l_copies
 
@@ -49,15 +51,15 @@ class ProxylessNASNet(nn.Module):
         )
         self.fc = nn.Linear(self.dag_layers.chn_out, self.n_classes)
 
-    
-    def forward(self, x, w_dag):
-        w_dag.detach_()
+    # @profile_time
+    def forward(self, x, w_dag, s_dag=None):
+        tprof.begin_acc_item('model')
         x = self.conv_first(x)
-        s_dag = w_dag.detach().view(-1, w_dag.shape[-1]).multinomial(self.n_samples).view(w_dag.shape[:-1]).unsqueeze(-1)
         y = self.dag_layers((x, ) * self.n_inputs_model, w_dag, s_dag)
         y = self.conv_last(y)
         y = y.view(y.size(0), -1) # flatten
         y = self.fc(y)
+        # tprof.stat_acc('model')
         return y
 
     def freeze(self, freeze, w_dag=None, kwargs={}):
@@ -126,6 +128,7 @@ class NASController(nn.Module):
     def __init__(self, config, criterion, ops, device_ids=None, net=None, net_kwargs={}):
         super().__init__()
         self.n_nodes = config.nodes
+        self.n_samples = config.samples
         self.criterion = criterion
         if device_ids is None:
             device_ids = list(range(torch.cuda.device_count()))
@@ -145,20 +148,22 @@ class NASController(nn.Module):
 
 
     def forward(self, x):
-        w_dag = F.softmax(self.alpha, dim=-1)
-
+        w_dag = F.softmax(self.alpha, dim=-1).detach()
+        s_dag = w_dag.detach().view(-1, w_dag.shape[-1]).multinomial(self.n_samples).view(w_dag.shape[:-1]).unsqueeze(-1)
+        
         if len(self.device_ids) == 1:
-            return self.net(x, w_dag)
+            return self.net(x, w_dag, s_dag)
 
         # scatter x
         xs = nn.parallel.scatter(x, self.device_ids)
         # broadcast weights
-        w_dag_copies = broadcast_list(w_dag, self.device_ids)
+        w_dag_copies = Broadcast.apply(self.device_ids, w_dag)
+        s_dag_copies = Broadcast.apply(self.device_ids, s_dag)
 
         # replicate modules
         replicas = nn.parallel.replicate(self.net, self.device_ids)
         outputs = nn.parallel.parallel_apply(replicas,
-                                             list(zip(xs, w_dag_copies)),
+                                             list(zip(xs, w_dag_copies, s_dag_copies)),
                                              devices=self.device_ids)
         return nn.parallel.gather(outputs, self.device_ids[0])
     

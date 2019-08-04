@@ -16,6 +16,7 @@ import utils
 from utils.eval import validate
 from architect import DARTSArchitect, BinaryGateArchitect
 from visualize import plot
+from profile.profiler import tprof
 
 def search(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, device, config):
 
@@ -82,7 +83,25 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, d
     # architect = DARTSArchitect(model, config.w_optim.momentum, config.w_optim.weight_decay)
     architect = BinaryGateArchitect(model, config.w_optim.momentum, config.w_optim.weight_decay)
 
+    # warmup training loop
+    logger.info('warmup training begin')
+    for epoch in itertools.count(init_epoch+1):
+        if epoch == config.warmup_epochs: break
+
+        lr_scheduler.step()
+        lr = lr_scheduler.get_lr()[0]
+        
+        # training
+        train(w_train_loader, None, model, writer, logger, architect, w_optim, a_optim, lr, epoch, device, config)
+
+        # validation
+        cur_step = (epoch+1) * len(w_train_loader)
+        top1 = validate(valid_loader, model, writer, logger, epoch, device, cur_step, config)
+        
+        print("")
+
     # training loop
+    logger.info('w/a training begin')
     best_top1 = 0.
     for epoch in itertools.count(init_epoch+1):
         if epoch == config.epochs: break
@@ -144,13 +163,19 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
     writer.add_scalar('train/lr', lr, cur_step)
 
     model.train()
-    tr_ratio = len(train_loader) // len(valid_loader)
-    val_iter = iter(valid_loader)
+
+    if not valid_loader is None:
+        tot_epochs = config.epochs
+        tr_ratio = len(train_loader) // len(valid_loader)
+        val_iter = iter(valid_loader)
+    else:
+        tot_epochs = config.warmup_epochs
+    
     for step, (trn_X, trn_y) in enumerate(train_loader):
         trn_X, trn_y = trn_X.to(device, non_blocking=True), trn_y.to(device, non_blocking=True)
         N = trn_X.size(0)
 
-        if step % tr_ratio == 0:
+        if not valid_loader is None and step % tr_ratio == 0:
             # phase 2. architect step (alpha)
             val_X, val_y = next(val_iter)   
             val_X, val_y = val_X.to(device, non_blocking=True), val_y.to(device, non_blocking=True)
@@ -174,7 +199,7 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
             logger.info(
                 "Train: [{:2d}/{}] Step {:03d}/{:03d} Loss {losses.avg:.3f} "
                 "Prec@(1,5) ({top1.avg:.1%}, {top5.avg:.1%})".format(
-                    epoch+1, config.epochs, step, len(train_loader)-1, losses=losses,
+                    epoch+1, tot_epochs, step, len(train_loader)-1, losses=losses,
                     top1=top1, top5=top5))
 
         writer.add_scalar('train/loss', loss.item(), cur_step)
@@ -182,4 +207,5 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
         writer.add_scalar('train/top5', prec5.item(), cur_step)
         cur_step += 1
 
-    logger.info("Train: [{:2d}/{}] Final Prec@1 {:.4%}".format(epoch+1, config.epochs, top1.avg))
+    logger.info("Train: [{:2d}/{}] Final Prec@1 {:.4%}".format(epoch+1, tot_epochs, top1.avg))
+    tprof.stat_acc('model')

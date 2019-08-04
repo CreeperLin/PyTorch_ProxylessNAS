@@ -124,6 +124,11 @@ def param_size(model):
         np.prod(v.size()) for k, v in model.named_parameters() if not k.startswith('aux_head'))
     return 4 * n_params / 1024. / 1024.
 
+def param_count(model):
+    """ Compute parameter count in million """
+    n_params = sum(
+        np.prod(v.size()) for k, v in model.named_parameters() if not k.startswith('aux_head'))
+    return n_params / 1000. / 1000.
 
 class AverageMeter():
     """ Computes and stores the average and current value """
