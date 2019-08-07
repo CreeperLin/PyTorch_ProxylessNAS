@@ -7,7 +7,8 @@ from models.layers import DAGLayer, PreprocLayer, MergeFilterLayer,\
                         DARTSMixedOp, BinGateMixedOp
 from models.defs import ConcatMerger, SumMerger, LastMerger,\
                         CombinationEnumerator, LastNEnumerator,\
-                        SplitAllocator, ReplicateAllocator
+                        TreeEnumerator, FirstNEnumerator,\
+                        EvenSplitAllocator, ReplicateAllocator
 import genotypes as gt
 
 from utils.profiling import profile_mem
@@ -28,12 +29,12 @@ def get_proxyless_nas(config, device, dev_list):
     proxyless_nas_kwargs = {
         'config': config,
         'n_nodes': n_layers,
-        'chn_in': (chn_in, ) * n_inputs_model,
+        'chn_in': (chn_cur, ) * n_inputs_model,
         'shared_a': False,
-        'allocator': ReplicateAllocator(),
-        'merger_state': SumMerger(),
-        'merger_out': LastMerger(),
-        'enumerator': LastNEnumerator(),
+        'allocator': ReplicateAllocator,
+        'merger_state': SumMerger,
+        'merger_out': LastMerger,
+        'enumerator': LastNEnumerator,
         'preproc': None,
         'aggregate': None,
         'edge_cls': DAGLayer,
@@ -42,10 +43,10 @@ def get_proxyless_nas(config, device, dev_list):
             'n_nodes': n_nodes,
             'chn_in': (chn_cur, ) * n_inputs_layer,
             'shared_a': False,
-            'allocator': ReplicateAllocator(),
-            'merger_state': SumMerger(),
-            'merger_out': ConcatMerger(),
-            'enumerator': CombinationEnumerator(),
+            'allocator': ReplicateAllocator,
+            'merger_state': SumMerger,
+            'merger_out': ConcatMerger,
+            'enumerator': CombinationEnumerator,
             'preproc': PreprocLayer,
             'aggregate': None,
             'edge_cls': BinGateMixedOp,
@@ -78,10 +79,10 @@ def get_dartslike(config, device, dev_list):
         'n_nodes': n_layers,
         'chn_in': (chn_in, ) * n_inputs_model,
         'shared_a': True,
-        'allocator': ReplicateAllocator(),
-        'merger_state': SumMerger(),
-        'merger_out': LastMerger(),
-        'enumerator': LastNEnumerator(),
+        'allocator': ReplicateAllocator,
+        'merger_state': SumMerger,
+        'merger_out': LastMerger,
+        'enumerator': LastNEnumerator,
         'preproc': None,
         'aggregate': None,
         'edge_cls': DAGLayer,
@@ -90,10 +91,10 @@ def get_dartslike(config, device, dev_list):
             'n_nodes': n_nodes,
             'chn_in': (chn_cur, ) * n_inputs_layer,
             'shared_a': False,
-            'allocator': ReplicateAllocator(),
-            'merger_state': SumMerger(),
-            'merger_out': ConcatMerger(),
-            'enumerator': CombinationEnumerator(),
+            'allocator': ReplicateAllocator,
+            'merger_state': SumMerger,
+            'merger_out': ConcatMerger,
+            'enumerator': CombinationEnumerator,
             'preproc': PreprocLayer,
             'aggregate': None,
             'edge_cls': DARTSMixedOp,

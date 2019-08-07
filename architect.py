@@ -138,10 +138,10 @@ class BinaryGateArchitect():
         loss = self.net.loss(val_X, val_y)
 
         # compute gradient
-        alphas = self.net.alpha
-        dalpha = self.net.alpha_grad(loss)
-
-        alphas.grad = dalpha
+        # alphas = self.net.alphas()
+        # dalpha = self.net.alpha_grad(loss)
+        # alphas.grad = dalpha
+        self.net.alpha_backward(loss)
         # dalpha = grads[:len(alphas)]
         # dw = v_grads[len(v_alphas):]
 

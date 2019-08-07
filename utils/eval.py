@@ -2,7 +2,7 @@
 import utils
 import torch
 
-def validate(valid_loader, model, writer, logger, epoch, device, cur_step, config):
+def validate(valid_loader, model, writer, logger, epoch, tot_epochs, device, cur_step, config):
     top1 = utils.AverageMeter()
     top5 = utils.AverageMeter()
     losses = utils.AverageMeter()
@@ -26,13 +26,13 @@ def validate(valid_loader, model, writer, logger, epoch, device, cur_step, confi
                 logger.info(
                     "Valid: [{:2d}/{}] Step {:03d}/{:03d} Loss {losses.avg:.3f} "
                     "Prec@(1,5) ({top1.avg:.1%}, {top5.avg:.1%})".format(
-                        epoch+1, config.epochs, step, len(valid_loader)-1, losses=losses,
+                        epoch+1, tot_epochs, step, len(valid_loader)-1, losses=losses,
                         top1=top1, top5=top5))
 
     writer.add_scalar('val/loss', losses.avg, cur_step)
     writer.add_scalar('val/top1', top1.avg, cur_step)
     writer.add_scalar('val/top5', top5.avg, cur_step)
 
-    logger.info("Valid: [{:2d}/{}] Final Prec@1 {:.4%}".format(epoch+1, config.epochs, top1.avg))
+    logger.info("Valid: [{:2d}/{}] Final Prec@1 {:.4%}".format(epoch+1, tot_epochs, top1.avg))
 
     return top1.avg

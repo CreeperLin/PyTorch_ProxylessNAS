@@ -7,7 +7,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-import adabound
 import itertools
 import traceback
 
@@ -85,20 +84,24 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, d
 
     # warmup training loop
     logger.info('warmup training begin')
-    for epoch in itertools.count(init_epoch+1):
-        if epoch == config.warmup_epochs: break
+    try:
+        tot_epochs = config.warmup_epochs
+        for epoch in itertools.count(init_epoch+1):
+            if epoch == tot_epochs: break
 
-        lr_scheduler.step()
-        lr = lr_scheduler.get_lr()[0]
-        
-        # training
-        train(w_train_loader, None, model, writer, logger, architect, w_optim, a_optim, lr, epoch, device, config)
+            lr_scheduler.step()
+            lr = lr_scheduler.get_lr()[0]
 
-        # validation
-        cur_step = (epoch+1) * len(w_train_loader)
-        top1 = validate(valid_loader, model, writer, logger, epoch, device, cur_step, config)
-        
-        print("")
+            # training
+            train(w_train_loader, None, model, writer, logger, architect, w_optim, a_optim, lr, epoch, device, config)
+
+            # validation
+            cur_step = (epoch+1) * len(w_train_loader)
+            top1 = validate(valid_loader, model, writer, logger, epoch, tot_epochs, device, cur_step, config)
+
+            print("")
+    except KeyboardInterrupt:
+        print('skipped')
 
     # training loop
     logger.info('w/a training begin')
@@ -116,7 +119,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, d
 
         # validation
         cur_step = (epoch+1) * len(w_train_loader)
-        top1 = validate(valid_loader, model, writer, logger, epoch, device, cur_step, config) 
+        top1 = validate(valid_loader, model, writer, logger, epoch, tot_epochs, device, cur_step, config) 
 
         # log
         # genotype
@@ -124,10 +127,9 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, d
         logger.info("genotype = {}".format(genotype))
 
         # genotype as a image
-        # plot_path = os.path.join(config.plot_path, "EP{:02d}".format(epoch+1))
-        # caption = "Epoch {}".format(epoch+1)
-        # plot(genotype.normal, plot_path + "-normal", caption)
-        # plot(genotype.reduce, plot_path + "-reduce", caption)
+        plot_path = os.path.join(config.plot_path, "EP{:02d}".format(epoch+1))
+        caption = "Epoch {}".format(epoch+1)
+        plot(genotype.dag, model.dag_layers, plot_path + "-dag", caption)
 
         # save
         if best_top1 < top1:

@@ -57,7 +57,6 @@ model:
   channel_multiplier: 3   # init channel multiplier
   nodes: 4                # num of nodes (states) per layer
   layers: 8               # num of DAG layers (cells) in model
-  # stages: 3               # num of dag edges of cells
   inputs_model: 2
   inputs_layer: 2
   inputs_node: 1
