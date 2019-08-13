@@ -8,16 +8,14 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 import itertools
-import traceback
 
 # from utils.hparam import load_hparam_str
 import utils
 from utils.eval import validate
-from architect import DARTSArchitect, BinaryGateArchitect
 from visualize import plot
 from profile.profiler import tprof
 
-def search(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, device, config):
+def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, logger, device, config):
 
     if config.split:
         data = train_data
@@ -79,8 +77,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, d
     else:
         logger.info("Starting new training run")
     
-    # architect = DARTSArchitect(model, config.w_optim.momentum, config.w_optim.weight_decay)
-    architect = BinaryGateArchitect(model, config.w_optim.momentum, config.w_optim.weight_decay)
+    architect = arch(model, config.w_optim.momentum, config.w_optim.weight_decay)
 
     # warmup training loop
     logger.info('warmup training begin')
@@ -106,8 +103,9 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, d
     # training loop
     logger.info('w/a training begin')
     best_top1 = 0.
+    tot_epochs = config.epochs
     for epoch in itertools.count(init_epoch+1):
-        if epoch == config.epochs: break
+        if epoch == tot_epochs: break
 
         lr_scheduler.step()
         lr = lr_scheduler.get_lr()[0]
@@ -127,9 +125,11 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, d
         logger.info("genotype = {}".format(genotype))
 
         # genotype as a image
-        plot_path = os.path.join(config.plot_path, "EP{:02d}".format(epoch+1))
-        caption = "Epoch {}".format(epoch+1)
-        plot(genotype.dag, model.dag_layers, plot_path + "-dag", caption)
+        dag = model.get_dag()
+        if not dag is None:
+            plot_path = os.path.join(config.plot_path, "EP{:02d}".format(epoch+1))
+            caption = "Epoch {}".format(epoch+1)
+            plot(genotype.dag, dag, plot_path + "-dag", caption)
 
         # save
         if best_top1 < top1:
@@ -154,6 +154,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, d
         
     logger.info("Final best Prec@1 = {:.4%}".format(best_top1))
     logger.info("Best Genotype = {}".format(best_genotype))
+    tprof.stat_acc('model')
 
 
 def train(train_loader, valid_loader, model, writer, logger, architect, w_optim, a_optim, lr, epoch, device, config):

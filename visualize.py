@@ -18,7 +18,7 @@ acronym = {
 
 def subplot(genotype, prefix, dag_layers):
     edge_attr = {
-        'fontsize': '20',
+        'fontsize': '15',
         'fontname': 'times'
     }
     node_attr = {
@@ -89,7 +89,7 @@ def subplot(genotype, prefix, dag_layers):
 def plot(genotype, dag_layers, file_path, caption=None):
     """ make DAG plot and save to file_path as .png """
     edge_attr = {
-        'fontsize': '20',
+        'fontsize': '15',
         'fontname': 'times'
     }
     node_attr = {

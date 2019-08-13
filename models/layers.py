@@ -3,24 +3,23 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import models.ops
 import genotypes as gt
 from utils import param_size
 from profile.profiler import tprof
+from models.nas_modules import NASModule
 
 edge_id = 0
 
-class ProxylessNASLossLayer(nn.Module):
-    def __init__(self, w_lat):
-        super(ProxylessNASLossLayer, self).__init__()
-        self.ce_loss = nn.CrossEntropyLoss()
-        self.w_lat = w_lat
+# class ProxylessNASLossLayer(nn.Module):
+#     def __init__(self, w_lat):
+#         super(ProxylessNASLossLayer, self).__init__()
+#         self.ce_loss = nn.CrossEntropyLoss()
+#         self.w_lat = w_lat
 
-    def forward(self, c_pred, c_true, latency):
-        ce_loss = self.ce_loss(c_pred, c_true)
-        lat_loss = self.w_lat * latency
-        return ce_loss + lat_loss
-
+#     def forward(self, c_pred, c_true, latency):
+#         ce_loss = self.ce_loss(c_pred, c_true)
+#         lat_loss = self.w_lat * latency
+#         return ce_loss + lat_loss
 
 class PreprocLayer(nn.Module):
     """ Standard conv
@@ -64,6 +63,8 @@ class DAGLayer(nn.Module):
         self.n_states = self.n_input + self.n_nodes
         self.n_input_e = len(edge_kwargs['chn_in'])
         self.shared_a = shared_a
+        if shared_a:
+            NASModule.add_shared_param()
         self.allocator = allocator(self.n_input, self.n_nodes)
         self.merger_state = merger_state()
         self.merger_out = merger_out(start=self.n_input)
@@ -81,22 +82,27 @@ class DAGLayer(nn.Module):
                 self.preprocs.append(preproc(chn_in[i], chn_cur, 1, 1, 0, False))
                 chn_states.append(chn_cur)
 
-        self.dag = nn.ModuleList()
-        self.edges = []
-        self.num_edges = 0
-        for i in range(n_nodes):
-            cur_state = self.n_input+i
-            self.dag.append(nn.ModuleList())
-            num_edges = self.enumerator.len_enum(cur_state, self.n_input_e)
-            for sidx in self.enumerator.enum(cur_state, self.n_input_e):
-                e_chn_in = self.allocator.chn_in([chn_states[s] for s in sidx], sidx, cur_state)
-                edge_kwargs['chn_in'] = e_chn_in
-                edge_kwargs['shared_a'] = shared_a
-                e = edge_cls(**edge_kwargs)
-                self.dag[i].append(e)
-                self.edges.append(e)
-            self.num_edges += num_edges
-            chn_states.append(self.merger_state.chn_out([ei.chn_out for ei in self.dag[i]]))
+        if not config.augment:
+            self.dag = nn.ModuleList()
+            self.edges = []
+            self.num_edges = 0
+            for i in range(n_nodes):
+                cur_state = self.n_input+i
+                self.dag.append(nn.ModuleList())
+                num_edges = self.enumerator.len_enum(cur_state, self.n_input_e)
+                for sidx in self.enumerator.enum(cur_state, self.n_input_e):
+                    e_chn_in = self.allocator.chn_in([chn_states[s] for s in sidx], sidx, cur_state)
+                    edge_kwargs['chn_in'] = e_chn_in
+                    edge_kwargs['shared_a'] = shared_a
+                    e = edge_cls(**edge_kwargs)
+                    self.dag[i].append(e)
+                    self.edges.append(e)
+                self.num_edges += num_edges
+                chn_states.append(self.merger_state.chn_out([ei.chn_out for ei in self.dag[i]]))
+        else:
+            self.chn_states = chn_states
+            self.edge_cls = edge_cls
+            self.edge_kwargs = edge_kwargs
         
         print('DAGLayer: etype:{} chn_in:{} #n:{} #e:{}'.format(str(edge_cls), chn_in, self.n_nodes, self.num_edges))
 
@@ -121,10 +127,8 @@ class DAGLayer(nn.Module):
             eidx = 0
             n_states = self.n_input+nidx
             for sidx in self.enumerator.enum(n_states, self.n_input_e):
-                res.append(edges[eidx](
-                        self.allocator.alloc([states[i] for i in sidx], sidx, n_states)
-                    )
-                )
+                e_in = self.allocator.alloc([states[i] for i in sidx], sidx, n_states)
+                res.append(edges[eidx](e_in))
                 eidx += 1
             s_cur = self.merger_state.merge(res)
             states.append(s_cur)
@@ -161,239 +165,89 @@ class DAGLayer(nn.Module):
             gene.append([g for w, g in topk_genes])
         return 0, gene
     
-    def from_genotype(self, C_in, gene, edge_kwargs):
+    def build_from_genotype(self, gene):
         """ generate discrete ops from gene """
-        dag = nn.ModuleList()
+        self.dag = nn.ModuleList()
+        chn_states = self.chn_states
+        edge_cls = self.edge_cls
+        edge_kwargs = self.edge_kwargs
         for edges in gene:
             row = nn.ModuleList()
             for g_child, sidx, n_states in edges:
                 e_chn_in = self.allocator.chn_in(
                     [chn_states[s] for s in sidx], sidx, n_states)
                 edge_kwargs['chn_in'] = e_chn_in
-                edge_kwargs['gene'] = g_child
                 e = edge_cls(**edge_kwargs)
+                e.build_from_genotype(g_child)
                 row.append(e)
-            dag.append(row)
-        return dag
+            self.dag.append(row)
 
-class NASModule(nn.Module):
-    _modules = []
-    _params = []
-    _module_id = -1
-    _param_id = -1
-    _params_map = {}
 
-    def __init__(self, config, params_shape, shared_p=True):
-        super().__init__()
-        self.id = self.get_new_id()
-        if shared_p:
-            self.pid = NASModule._param_id
+class TreeLayer(nn.Module):
+    def __init__(self, config, n_nodes, chn_in, shared_a,
+                    allocator, merger_out, preproc, aggregate,
+                    child_cls, child_kwargs, edge_cls, edge_kwargs,
+                    children=None, edges=None):
+        self.edges = nn.ModuleList()
+        self.children = nn.ModuleList()
+        self.n_nodes = n_nodes
+        self.n_states = self.n_input + self.n_nodes
+        self.allocator = allocator(self.n_input, self.n_nodes)
+        self.merger_out = merger_out(start=self.n_input)
+        self.merge_out_range = self.merger_out.merge_range(self.n_states)
+        if shared_a:
+            NASModule.add_shared_param()
+
+        chn_states = []
+        if not preproc:
+            self.preprocs = None
+            chn_states.extend(chn_in)
         else:
-            self.pid = NASModule.add_param(params_shape)
-        NASModule.add_module(self, self.id, self.pid)
-        # print('reg NAS module: {} {}'.format(self.id, pid))
+            chn_cur = edge_kwargs['chn_in'][0]
+            self.preprocs = nn.ModuleList()
+            for i in range(self.n_input):
+                self.preprocs.append(preproc(chn_in[i], chn_cur, 1, 1, 0, False))
+                chn_states.append(chn_cur)
+        
+        sidx = range(self.n_input)
+        for i in range(self.n_nodes):
+            if not edges is None:
+                self.edges.append(edges[i])
+            else:
+                e_chn_in = self.allocator.chn_in([chn_states[s] for s in sidx], sidx, i)
+                edge_kwargs['chn_in'] = e_chn_in
+                edge_kwargs['shared_a'] = shared_a
+                self.edges.append(edge_cls(**edge_kwargs))
+            if not children is None:
+                self.children.append(children[i])
+            else:
+                self.children.append(child_cls(**child_kwargs))
+        
+        print('TreeLayer: etype:{} ctype:{} chn_in:{} #n/e:{}'.format(str(edge_cls), str(child_cls), chn_in, self.n_nodes))
 
-    @staticmethod
-    def get_new_id():
-        NASModule._module_id += 1
-        return NASModule._module_id
-
-    @staticmethod
-    def add_param(params_shape):
-        NASModule._param_id += 1
-        param = nn.Parameter(1e-3*torch.randn(params_shape).cuda())
-        NASModule._params.append(param)
-        NASModule._params_map[NASModule._param_id] = []
-        return NASModule._param_id
-
-    @staticmethod
-    def add_module(module, mid, pid):
-        NASModule._modules.append(module)
-        NASModule._params_map[pid].append(mid)
-    
-    @staticmethod
-    def param_forward(params=None):
-        mmap = NASModule._modules
-        pmap = NASModule._params_map if params is None else params
-        for pid in pmap:
-            for mid in pmap[pid]:
-                mmap[mid].param_forward(NASModule._params[pid])
-    
-    @staticmethod
-    def forward(x):
-        pass
-    
-    @staticmethod
-    def modules():
-        for m in NASModule._modules:
-            yield m
-    
-    @staticmethod
-    def params_grad(loss):
-        mmap = NASModule._modules
-        pmap = NASModule._params_map
-        for pid in pmap:
-            mlist = pmap[pid]
-            p_grad = mmap[mlist[0]].alpha_grad(loss)
-            for i in range(1,len(mlist)):
-                p_grad += mmap[mlist[i]].params_grad(loss)
-            yield p_grad
-    
-    @staticmethod
-    def params():
-        for p in NASModule._params:
-            yield p
-    
-    def get_param(self):
-        return NASModule._params[self.pid]
-    
-    @staticmethod
-    def param_backward(loss):
-        mmap = NASModule._modules
-        pmap = NASModule._params_map
-        for pid in pmap:
-            mlist = pmap[pid]
-            p_grad = mmap[mlist[0]].alpha_grad(loss)
-            for i in range(1,len(mlist)):
-                p_grad += mmap[mlist[i]].params_grad(loss)
-            NASModule._params[pid].grad = p_grad
-    
-    @staticmethod
-    def from_genotype():
-        pass
-    
-    def to_genotype(k, ops):
-        pass
-
-
-class DARTSMixedOp(NASModule):
-    """ Mixed operation as in DARTS """
-    def __init__(self, config, chn_in, stride, ops):
-        params_shape = (len(ops), )
-        super().__init__(config, params_shape)
-        self.in_deg = len(chn_in)
-        if self.in_deg == 1:
-            self.chn_in = chn_in[0]
+        if aggregate is not None:
+            self.merge_filter = aggregate(n_in=self.n_states,
+                                        n_out=self.n_states//2)
         else:
-            self.agg_weight = nn.Parameter(torch.zeros(self.in_deg, requires_grad=True))
-            self.chn_in = chn_in[0]
-        self._ops = nn.ModuleList()
-        for primitive in ops:
-            op = models.ops.OPS[primitive](self.chn_in, stride, affine=False)
-            self._ops.append(op)
-        self.params_shape = params_shape
-        self.chn_out = self.chn_in
-    
-    def forward(self, x, w_path, s_path=None):
-        if self.in_deg != 1:
-            x = torch.matmul(x, torch.sigmoid(self.agg_weight))
-        else:
-            x = x[0]
-        return sum(w * op(x) for w, op in zip(w_path, self._ops))
-
-
-class BinGateMixedOp(NASModule):
-    """ Mixed operation controlled by binary gate """
-    def __init__(self, config, chn_in, stride, ops, shared_a, gene=None):
-        params_shape = (len(ops), )
-        super().__init__(config, params_shape, shared_a)
-        self.in_deg = len(chn_in)
-        assert self.in_deg == 1
-        if self.in_deg == 1:
-            self.chn_in = chn_in[0]
-        else:
-            self.agg_weight = nn.Parameter(torch.zeros(self.in_deg, requires_grad=True))
-            self.chn_in = chn_in[0]
-        self._ops = nn.ModuleList()
-        self.n_samples = config.samples
-        self.s_path_f = None
-        self.frozen = False
-        self.w_lat = config.w_latency
-        if gene is None:
-            self.fixed = False
-            for primitive in ops:
-                op = models.ops.OPS[primitive](self.chn_in, stride, affine=False)
-                self._ops.append(op)
-        else:
-            self.from_genotype(gene, self.chn_in, ops)
-        self.params_shape = params_shape
-        self.chn_out = self.chn_in
-    
-    def param_forward(self, p):
-        w_path = F.softmax(p, dim=-1)
-        self.w_path_f = w_path.detach()
-        self.s_path_f = w_path.multinomial(self.n_samples).detach()
+            self.merge_filter = None
     
     def forward(self, x):
-        if self.in_deg != 1:
-            x = torch.matmul(x, torch.sigmoid(self.agg_weight))
+        if self.preprocs is None:
+            states = [st for st in x]
         else:
-            assert len(x) == 1
-            x = x[0]
-        if self.fixed:
-            return self.op(x)
-        self.x_f = x.detach()
-        smp = self.s_path_f
-        self.swap_ops(smp)
-        mid = str(self.id) + '_' + str(int(smp[0]))
-        tprof.timer_start(mid)
-        self.mout = sum(self._ops[i](x) for i in smp)
-        tprof.timer_stop(mid)
-        tprof.add_acc_item('model', mid)
-        return self.mout
-        # torch.cuda.empty_cache()
+            states = [self.preprocs[i](x[i]) for i in range(self.n_input)]
 
-    def swap_ops(self, samples):
-        for i, op in enumerate(self._ops):
-            if i in samples:
-                op.to(device='cuda')
-                for p in op.parameters():
-                    if not p.is_leaf: continue
-                    p.requires_grad = True
-            else:
-                op.to(device='cpu')
-                for p in op.parameters():
-                    if not p.is_leaf: continue
-                    p.requires_grad = False
-                    p.grad = None
+        n_states = self.n_input
+        sidx = range(self.n_input)
+        for edge, child in zip(self.edges, self.children):
+            out = self.allocator.alloc([states[i] for i in sidx], sidx, n_states)
+            if not edge is None:
+                out = edges(out)
+            if not child is None:
+                out = child(out)
+            states.append(out)
+        
+        states_f = states if self.merge_filter is None else self.merge_filter(states)
 
-    def alpha_grad(self, loss):
-        with torch.no_grad():
-            samples = self.s_path_f if self.frozen else range(len(self._ops))
-            a_grad = torch.zeros(self.params_shape).cuda()
-            y_grad = (torch.autograd.grad(loss, self.mout, retain_graph=True)[0]).detach()
-            self.mout.detach_()
-            for j in samples:
-                op = self._ops[j].to(device='cuda')
-                op_out = op(self.x_f)
-                op_out.detach_()
-                op.to(device='cpu')
-                g_grad = torch.sum(torch.mul(y_grad, op_out))
-                g_grad.detach_()
-                mid = str(self.id) + '_' + str(int(j))
-                lat_term = tprof.avg(mid) * self.w_lat
-                for i in range(self.params_shape[0]):
-                    kron = 1 if i==j else 0
-                    a_grad[i] += (g_grad + lat_term) * self.w_path_f[j] * (kron - self.w_path_f[i])
-            a_grad.detach_()
-        return a_grad
-    
-    def to_genotype(self, k, ops):
-        # assert ops[-1] == 'none'
-        w = F.softmax(self.get_param().detach(), dim=-1)
-        w_max, prim_idx = torch.topk(w, 1)
-        # gene = [ops[i] for i in prim_idx]
-        gene = [ops[i] for i in prim_idx if ops[i]!='none']
-        if gene == []: return -1, None
-        return w_max, gene
-    
-    def from_genotype(self, gene, C_in, ops):
-        op_name = gene[0]
-        op = ops.OPS[op_name](C_in, stride=1, affine=True)
-        if not isinstance(op, ops.Identity): # Identity does not use drop path
-            op = nn.Sequential(
-                op,
-                ops.DropPath_()
-            )
-        self.op = op.to(device='cuda')
-        self.fixed = True
+        out = self.merger_out.merge(states_f)
+        return out

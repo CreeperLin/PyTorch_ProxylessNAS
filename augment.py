@@ -47,14 +47,24 @@ def main():
     writer = get_writer(log_dir)
     writer.add_text('config', hp_str, 0)
     
-    # train_dl = load_data(hp.data, val=False)
-    # val_dl = load_data(hp.data, val=True)
+    dev, dev_list = init_device(hp.device, args.gpus)
 
-    train_dl, val_dl = load_data(hp.data)
+    train_data = load_data(hp.data.augment)
+    val_data = load_data(hp.data.augment, True)
 
-    model = get_model(hp.model)
+    gt.PRIMITIVES_DEFAULT = hp.genotypes
+    print(gt.PRIMITIVES_DEFAULT)
 
-    augment(out_dir, args.chkpt, model, train_dl, val_dl, logger, writer, hp.train)
+    # load genotype
+    g_str = config.genotype
+    if g_str == '':
+        genotype = gt.from_file(config.gt_file)
+    else:
+        genotype = gt.from_str(g_str)
+    
+    model, arch = get_model(hp.model, dev, dev_list, genotype)
+
+    augment(out_dir, args.chkpt, train_data, val_data, model, writer, logger, dev, hp.valid)
 
 
 if __name__ == '__main__':

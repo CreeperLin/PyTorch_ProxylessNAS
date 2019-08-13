@@ -26,7 +26,8 @@ train:
     lr: 0.025
     lr_min: 0.001
     momentum: 0.9
-    weight_decay: 0.0003
+    nesterov: True
+    weight_decay: 0.0001
     # type: 'adabound'
     # lr: 0.001
     # final_lr: 0.05
@@ -35,6 +36,8 @@ train:
     lr: 0.006
     momentum: 0.9
     weight_decay: 0.001
+  lr_schduler:
+    type: 'cosine'
   w_grad_clip: 5.
   warmup_epochs: 100
   epochs: 200
@@ -47,19 +50,19 @@ valid:
   workers: 0
   genotype: ''
   gt_file: ''
+  epochs: 600
+  aux_weight: 0.
 ---
 model:
   type: 'proxyless-nas'
-  # type: 'darts-no-reduce'
   classes: 10             # use 10 for MNIST, CIFAR10
   channel_in: 3           # 3 for ImageNet/CIFAR10, 1 for MNIST
   channel_init: 16        # init channel
-  channel_multiplier: 3   # init channel multiplier
-  nodes: 4                # num of nodes (states) per layer
-  layers: 8               # num of DAG layers (cells) in model
-  inputs_model: 2
-  inputs_layer: 2
-  inputs_node: 1
+  channel_multiplier: 1   # init channel multiplier
+  groups: 1                # num of nodes (states) per layer
+  blocks: 3              # num of DAG layers (cells) in model
+  alpha: 48.0
+  conv_groups: 2
   samples: 1
   w_latency: 0.0
 ---

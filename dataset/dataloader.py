@@ -47,8 +47,8 @@ def load_data(config, validation=False):
         val_transf = []
     elif dataset == 'cifar100':
         dset = datasets.CIFAR100
-        MEAN = [0.49139968, 0.48215827, 0.44653124]
-        STD = [0.24703233, 0.24348505, 0.26158768]
+        MEAN = [0.5070751592371323, 0.48654887331495095, 0.4409178433670343]
+        STD = [0.2673342858792401, 0.2564384629170883, 0.27615047132568404]
         trn_transf = [
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip()
@@ -85,7 +85,7 @@ def load_data(config, validation=False):
         ]
     elif dataset == 'image':
         dset = datasets.ImageFolder
-        MEAN = [0, 0, 0]
+        MEAN = [0.5, 0.5, 0.5]
         STD = [0, 0, 0]
         trn_transf = [
             transforms.RandomResizedCrop(224),

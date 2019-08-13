@@ -8,9 +8,7 @@ import torch
 import torch.nn as nn
 from models import ops
 
-
-Genotype = namedtuple('Genotype', 'dag')
-
+Genotype = namedtuple('Genotype', 'dag ops')
 
 PRIMITIVES_DEFAULT = [
     'max_pool_3x3',
@@ -27,20 +25,17 @@ PRIMITIVES_DEFAULT = [
 def pretty_print(gene):
     pass
 
-def from_str(s):
-    """ generate genotype from string
-    e.g. "Genotype(
-            normal=[[('sep_conv_3x3', 0), ('sep_conv_3x3', 1)],
-                    [('sep_conv_3x3', 1), ('dil_conv_3x3', 2)],
-                    [('sep_conv_3x3', 1), ('sep_conv_3x3', 2)],
-                    [('sep_conv_3x3', 1), ('dil_conv_3x3', 4)]],
-            normal_concat=range(2, 6),
-            reduce=[[('max_pool_3x3', 0), ('max_pool_3x3', 1)],
-                    [('max_pool_3x3', 0), ('skip_connect', 2)],
-                    [('max_pool_3x3', 0), ('skip_connect', 2)],
-                    [('max_pool_3x3', 0), ('skip_connect', 2)]],
-            reduce_concat=range(2, 6))"
-    """
+def to_file(gene, path):
+    g_str = str(gene)
+    with open(path, 'wb') as f:
+        f.write(g_str)
 
+def from_file(path):
+    with open(path, 'rb') as f:
+        g_str = f.read()
+    return from_str(g_str)
+
+def from_str(s):
+    """ generate genotype from string """
     genotype = eval(s)
     return genotype

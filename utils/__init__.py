@@ -10,6 +10,8 @@ from tensorboardX import SummaryWriter
 
 
 def parse_gpus(gpus):
+    if gpus == 'cpu':
+        return []
     if gpus == 'all':
         return list(range(torch.cuda.device_count()))
     else:
@@ -67,16 +69,18 @@ def check_config(hp, name):
 
 
 def init_device(config, ovr_gpus):
+    np.random.seed(config.seed)
+    torch.manual_seed(config.seed)
     if not ovr_gpus:
         config.gpus = parse_gpus(config.gpus)
     else:
         config.gpus = parse_gpus(ovr_gpus)
-    # set default gpu device id
+    if len(config.gpus)==0:
+        device = torch.device('cpu')
+        return device, []
     device = torch.device("cuda")
     torch.cuda.set_device(config.gpus[0])
-    # set seed
-    np.random.seed(config.seed)
-    torch.manual_seed(config.seed)
+    
     torch.cuda.manual_seed_all(config.seed)
     torch.backends.cudnn.benchmark = True
     return device, config.gpus
@@ -112,11 +116,18 @@ def get_optim(params, config):
         optimizer = torch.optim.SGD(params,
                             lr=config.lr,
                             momentum=config.momentum,
-                            weight_decay=config.weight_decay)
+                            weight_decay=config.weight_decay,
+                            nesterov=config.nesterov)
     else:
         raise Exception("Optimizer not supported: %s" % config.optimizer)
     return optimizer
 
+def get_lr_scheduler(config):
+    if config.type == 'cosine':
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR
+    else:
+        raise NotImplementedError
+    return lr_scheduler
 
 def param_size(model):
     """ Compute parameter size in MB """
@@ -126,9 +137,8 @@ def param_size(model):
 
 def param_count(model):
     """ Compute parameter count in million """
-    n_params = sum(
-        np.prod(v.size()) for k, v in model.named_parameters() if not k.startswith('aux_head'))
-    return n_params / 1000. / 1000.
+    n_params = sum([p.data.nelement() for p in model.parameters()])
+    return n_params / 1e6
 
 class AverageMeter():
     """ Computes and stores the average and current value """

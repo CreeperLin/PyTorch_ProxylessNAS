@@ -15,7 +15,7 @@ class TimeProfiler(object):
         self.timer_start('ofs')
         self.timer_stop('ofs')
         self.offset = self.table['ofs'][0]
-        # print('tprof: offset {}'.format(self.offset))
+        # print('tprof: offset {}'.self.offset))
     
     def timer_start(self, id):
         t0 = time.clock()
@@ -36,9 +36,8 @@ class TimeProfiler(object):
         tmin = np.min(arr)
         tmax = np.max(arr)
         std = np.std(arr)
-        print('Time %s: %s / %s / %s / %s / %s / %s'
-            % (id.center(10,' '), len(arr), format(arr[-1], '0.4f'), format(avg, '0.4f'),
-            format(tmin, '0.4f'), format(tmax, '0.4f'), format(std, '0.4f')))
+        print('Time {}: {} / {:.4f} / {:.4f} / {:.4f} / {:.4f} / {:.4f}'.format(
+            id.center(10,' '), len(arr), arr[-1], avg, tmin, tmax, std))
     
     def stat_all(self):
         for i in self.table:
@@ -67,9 +66,8 @@ class TimeProfiler(object):
         tmin = np.min(arr)
         tmax = np.max(arr)
         std = np.std(arr)
-        print('Acc Time %s : %s / %s / %s / %s / %s / %s'
-            % (cid.center(10,' '), len(arr), format(arr[-1], '0.4f'), format(avg, '0.4f'),
-             format(tmax, '0.4f'), format(tmin, '0.4f'), format(std, '0.4f')))
+        print('Acc Time {} : {} / {:.4f} / {:.4f} / {:.4f} / {:.4f} / {:.4f}'.format(
+            cid.center(10,' '), len(arr), arr[-1], avg, tmax, tmin, std))
 
     def avg(self, id):
         return 0 if not id in self.table else np.mean(self.table[id])

@@ -11,7 +11,7 @@ import argparse
 from utils.train import search
 from utils.hparam import HParam
 from utils.model import get_model
-from utils import check_config, get_logger, get_writer, init_device, param_size
+import utils
 
 from dataset.dataloader import load_data
 import genotypes as gt
@@ -29,7 +29,7 @@ def main():
     args = parser.parse_args()
 
     hp = HParam(args.config)
-    if check_config(hp, args.name):
+    if utils.check_config(hp, args.name):
         raise Exception("Config error.")
     hp_str = hp.to_string()
 
@@ -41,25 +41,21 @@ def main():
     log_dir = os.path.join(log_dir, args.name)
     os.makedirs(log_dir, exist_ok=True)
 
-    logger = get_logger(log_dir, args.name)
+    logger = utils.get_logger(log_dir, args.name)
 
-    writer = get_writer(log_dir)
+    writer = utils.get_writer(log_dir)
     writer.add_text('config', hp_str, 0)
     
-    # train_dl = load_data(hp.data, val=False)
-    # val_dl = load_data(hp.data, val=True)
-    dev, dev_list = init_device(hp.device, args.gpus)
+    dev, dev_list = utils.init_device(hp.device, args.gpus)
 
     train_data = load_data(hp.data.search)
 
     gt.PRIMITIVES_DEFAULT = hp.genotypes
     print(gt.PRIMITIVES_DEFAULT)
 
-    model = get_model(hp.model, dev, dev_list)
-    mb_params = param_size(model)
-    logger.info("Model size = {:.3f} MB".format(mb_params))
+    model, arch = get_model(hp.model, dev, dev_list)    
 
-    search(out_dir, args.chkpt, train_data, None, model, writer, logger, dev, hp.train)
+    search(out_dir, args.chkpt, train_data, None, model, arch, writer, logger, dev, hp.train)
 
 
 if __name__ == '__main__':
