@@ -3,6 +3,7 @@
     - gene: discrete ops information (w/o output connection)
     - dag: real ops (can be mixed or discrete, but Genotype has only discrete information itself)
 """
+import os
 from collections import namedtuple
 import torch
 import torch.nn as nn
@@ -27,11 +28,13 @@ def pretty_print(gene):
 
 def to_file(gene, path):
     g_str = str(gene)
-    with open(path, 'wb') as f:
+    with open(path, 'w') as f:
         f.write(g_str)
 
 def from_file(path):
-    with open(path, 'rb') as f:
+    if not os.path.exists(path):
+        return Genotype(dag=None, ops=None)
+    with open(path, 'r') as f:
         g_str = f.read()
     return from_str(g_str)
 

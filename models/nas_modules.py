@@ -35,6 +35,10 @@ class NASModule(nn.Module):
             NASModule.new_shared_p = False
         NASModule.add_module(self, self.id, self.pid)
         print('reg NAS module: {} {}'.format(self.id, self.pid))
+    
+    @staticmethod
+    def set_device(dev_list):
+        NASModule._dev_list = dev_list if len(dev_list)>0 else [None]
 
     @staticmethod
     def get_new_id():
@@ -202,13 +206,15 @@ class BinGateMixedOp(NASModule):
                 x = x[0]
         if self.fixed:
             return self.op(x)
-        self.set_state('x_f', x.detach())
+        dev_id = x.device.index
+        dev_id = '_' if dev_id is None else str(dev_id)
+        self.set_state('x_f'+dev_id, x.detach())
         smp = self.get_state('s_path_f')
         self.swap_ops(smp, x.device)
         mid = str(self.id) + '_' + str(int(smp[0]))
         tprof.timer_start(mid)
         m_out = sum(self._ops[i](x) for i in smp)
-        self.set_state('m_out', m_out)
+        self.set_state('m_out'+dev_id, m_out)
         tprof.timer_stop(mid)
         tprof.add_acc_item('model', mid)
         return m_out
@@ -229,13 +235,15 @@ class BinGateMixedOp(NASModule):
                     p.grad = None
 
     def param_grad(self, loss):
+        dev_id = loss.device.index
+        dev_id = '_' if dev_id is None else str(dev_id)
         with torch.no_grad():
             samples = range(len(self._ops))
             a_grad = torch.zeros(self.params_shape)
-            m_out = self.get_state('m_out')
+            m_out = self.get_state('m_out'+dev_id)
             y_grad = (torch.autograd.grad(loss, m_out, retain_graph=True)[0]).detach()
             m_out.detach_()
-            x_f = self.get_state('x_f')
+            x_f = self.get_state('x_f'+dev_id)
             w_path_f = self.get_state('w_path_f')
             for j in samples:
                 op = self._ops[j].to(device=x_f.device)
@@ -245,10 +253,10 @@ class BinGateMixedOp(NASModule):
                 g_grad = torch.sum(torch.mul(y_grad, op_out))
                 g_grad.detach_()
                 mid = str(self.id) + '_' + str(int(j))
-                lat_term = tprof.avg(mid) * self.w_lat
+                lat_term = 0 if self.w_lat is None else tprof.avg(mid) * self.w_lat
                 for i in range(self.params_shape[0]):
                     kron = 1 if i==j else 0
-                    a_grad[i] += (g_grad + lat_term) * w_path_f[j] * (kron - w_path_f[i]) + a_grad[i]
+                    a_grad[i] += (g_grad + lat_term) * w_path_f[j] * (kron - w_path_f[i])
             a_grad.detach_()
         return a_grad
     
@@ -273,7 +281,7 @@ class BinGateMixedOp(NASModule):
 
 
 class NASController(nn.Module):
-    def __init__(self, config, criterion, ops, device_ids=None, net=None, net_cls=None, net_kwargs={}):
+    def __init__(self, config, criterion, ops, device_ids=None, net_cls=None, net_kwargs={}, net=None):
         super().__init__()
         self.n_samples = config.samples
         self.criterion = criterion
@@ -369,6 +377,13 @@ class NASController(nn.Module):
     def drop_path_prob(self, p):
         """ Set drop path probability """
         for module in self.modules():
-            if isinstance(module, ops.DropPath_):
+            if isinstance(module, DropPath_):
                 module.p = p
 
+
+class GradPseudoNet(nn.Module):
+    def __init__(self):
+        pass
+    
+    def forward(self, x):
+        pass

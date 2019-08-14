@@ -99,21 +99,23 @@ def load_data(config, validation=False):
         raise ValueError('not expected dataset = {}'.format(dataset))
 
     normalize = [transforms.ToTensor(), transforms.Normalize(MEAN, STD)]
+    trn_transf.extend(normalize)
+    val_transf.extend(normalize)
 
     if config.cutout > 0:
-        trn_transf.append(Cutout(cutout))
+        trn_transf.append(Cutout(config.cutout))
     
     if dset == datasets.ImageFolder:
         if validation:
-            data = dset(config.val, transform=transforms.Compose(trn_transf + normalize))
+            data = dset(config.val, transform=transforms.Compose(trn_transf))
         else:
-            data = dset(config.train, transform=transforms.Compose(trn_transf + normalize))
+            data = dset(config.train, transform=transforms.Compose(trn_transf))
     elif validation:
         data = dset(config.root, train = False, 
-                transform=transforms.Compose(val_transf + normalize), download = True)
+                transform=transforms.Compose(val_transf), download = True)
     else:
         data = dset(config.root, train = True,
-                transform=transforms.Compose(trn_transf + normalize), download = True)
+                transform=transforms.Compose(trn_transf), download = True)
     
     # if config.split:
     #     n_train = len(data)

@@ -8,12 +8,13 @@ import torch
 import logging
 import argparse
 
-from utils.train import augment
-from utils.hparams import HParam
-from utils.writer import MyWriter
+from utils.eval import augment
+from utils.hparam import HParam
 from utils import check_config
 from utils import get_logger
-from utils import get_model
+from utils.model import get_model
+import utils
+import genotypes as gt
 
 from dataset.dataloader import load_data
 
@@ -41,13 +42,13 @@ def main():
 
     logger = get_logger(log_dir, args.name)
 
-    if check_config(hp, logger):
+    if check_config(hp, args.name):
         raise Exception("Config error.")
 
-    writer = get_writer(log_dir)
-    writer.add_text('config', hp_str, 0)
+    writer = utils.get_writer(log_dir)
+    # writer.add_text('config', hp_str, 0)
     
-    dev, dev_list = init_device(hp.device, args.gpus)
+    dev, dev_list = utils.init_device(hp.device, args.gpus)
 
     train_data = load_data(hp.data.augment)
     val_data = load_data(hp.data.augment, True)
@@ -56,9 +57,9 @@ def main():
     print(gt.PRIMITIVES_DEFAULT)
 
     # load genotype
-    g_str = config.genotype
+    g_str = hp.valid.genotype
     if g_str == '':
-        genotype = gt.from_file(config.gt_file)
+        genotype = gt.from_file(hp.valid.gt_file)
     else:
         genotype = gt.from_str(g_str)
     

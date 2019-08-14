@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 from models.dagnet import BinGateNet, DARTSLikeNet
-from models.pyramidnet import PyramidNet
+from models.pyramidnet import PyramidNet, GroupConv
 from models.proxylessnas import ProxylessNASNet
 from models.layers import DAGLayer, TreeLayer,\
                         PreprocLayer, MergeFilterLayer
@@ -28,6 +28,7 @@ def get_proxylessnasnet(config, device, dev_list):
     conv_groups = config.conv_groups
     n_blocks = config.blocks
     alpha = config.alpha
+    bneck = config.bottleneck_ratio
     ops = gt.PRIMITIVES_DEFAULT
     model_config = {
 	    'start_planes': chn_cur,
@@ -36,7 +37,7 @@ def get_proxylessnasnet(config, device, dev_list):
 	    'total_groups': n_groups,
 	    'downsample_type': 'avg_pool',  # avg, max
 	    ######################################################
-	    'bottleneck': 4,
+	    'bottleneck': bneck,
 	    'ops_order': 'bn_act_weight',
 	    'dropout_rate': 0,
 	    ######################################################
@@ -64,6 +65,32 @@ def get_proxylessnasnet(config, device, dev_list):
     arch = BinaryGateArchitect
     return model, arch
 
+def get_pyramidnet_origin(config, device, dev_list):
+    chn_in = config.channel_in
+    chn = config.channel_init
+    chn_cur = chn * config.channel_multiplier
+    n_classes = config.classes
+    n_groups = config.groups
+    conv_groups = config.conv_groups
+    n_blocks = config.blocks
+    alpha = config.alpha
+    ops = gt.PRIMITIVES_DEFAULT
+    pyramidnet_kwargs = {
+        'config': config,
+        'cell_cls': GroupConv,
+        'cell_kwargs': {
+            'chn_in': None,
+            'chn_out': None,
+            'kernel_size': 3,
+            'padding': 1,
+        }
+    }
+    criterion = nn.CrossEntropyLoss().to(device)
+    net = PyramidNet(**pyramidnet_kwargs)
+    model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
+                        dev_list, net=net).to(device)
+    arch = BinaryGateArchitect
+    return model, arch
 
 def get_pyramidnet(config, device, dev_list):
     chn_in = config.channel_in
@@ -79,9 +106,6 @@ def get_pyramidnet(config, device, dev_list):
 
     pyramidnet_kwargs = {
         'config': config,
-        'n_nodes': n_layers,
-        'chn_in': (chn_cur, ) * n_inputs_model,
-        'shared_a': False,
         'cell_cls': TreeLayer,
         'cell_kwargs': {
             'config': config,
@@ -247,6 +271,7 @@ def get_dartslike(config, device, dev_list):
 model_creator = {
     'proxyless-nas': get_proxylessnasnet,
     'pyramidnet': get_pyramidnet,
+    'pyramidnet-origin': get_pyramidnet_origin,
     'darts-no-reduce': get_dartslike,
     'dagnet': get_dagnet,
 }
@@ -260,6 +285,7 @@ def get_model(config, device, dev_list, genotype=None):
         if config.augment:
             model.build_from_genotype(genotype)
             print("genotype = {}".format(model.genotype()))
+        if config.verbose: print(model)
         mb_params = param_size(model)
         n_params = param_count(model)
         print("Model params count: {:.3f} M, size: {:.3f} MB".format(n_params, mb_params))

@@ -18,11 +18,11 @@ def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, 
     
     valid_loader = DataLoader(valid_data,
         batch_size=config.val_batch_size,
-        num_workers=config.num_workers,
+        num_workers=config.workers,
         shuffle=False, pin_memory=True, drop_last=False)
     train_loader = DataLoader(train_data,
         batch_size=config.trn_batch_size,
-        num_workers=config.num_workers,
+        num_workers=config.workers,
         shuffle=True, pin_memory=True, drop_last=True)
     
     w_optim = utils.get_optim(model.weights(), config.w_optim)
@@ -37,7 +37,6 @@ def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, 
         checkpoint = torch.load(chkpt_path)
         model.load_state_dict(checkpoint['model'])
         w_optim.load_state_dict(checkpoint['w_optim'])
-        a_optim.load_state_dict(checkpoint['a_optim'])
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
         init_epoch = checkpoint['epoch']
 
@@ -52,7 +51,7 @@ def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, 
         if epoch == tot_epochs: break
 
         drop_prob = config.drop_path_prob * epoch / config.epochs
-        model.module.drop_path_prob(drop_prob)
+        model.drop_path_prob(drop_prob)
 
         lr_scheduler.step()
         lr = lr_scheduler.get_lr()[0]
@@ -61,7 +60,7 @@ def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, 
         train(train_loader, model, writer, logger, w_optim, epoch, lr, device, config)
 
         # validation
-        cur_step = (epoch+1) * len(w_train_loader)
+        cur_step = (epoch+1) * len(train_loader)
         top1 = validate(valid_loader, model, writer, logger, epoch, tot_epochs, device, cur_step, config) 
 
         # save
@@ -105,7 +104,7 @@ def train(train_loader, model, writer, logger, optim, epoch, lr, device, config)
         logits, aux_logits = model(X)
         loss = model.criterion(logits, y)
         if config.aux_weight > 0.:
-            loss += config.aux_weight * criterion(aux_logits, y)
+            loss += config.aux_weight * model.criterion(aux_logits, y)
         loss.backward()
         # gradient clipping
         nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)

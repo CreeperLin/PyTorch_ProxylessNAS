@@ -14,6 +14,7 @@ import utils
 from utils.eval import validate
 from visualize import plot
 from profile.profiler import tprof
+import genotypes as gt
 
 def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, logger, device, config):
 
@@ -119,25 +120,26 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         cur_step = (epoch+1) * len(w_train_loader)
         top1 = validate(valid_loader, model, writer, logger, epoch, tot_epochs, device, cur_step, config) 
 
-        # log
         # genotype
         genotype = model.genotype()
         logger.info("genotype = {}".format(genotype))
+        
+        if best_top1 < top1:
+            best_top1 = top1
+            best_genotype = genotype
 
+        if epoch % config.save_freq != 0:
+            print("")
+            continue
+        
+        gt.to_file(genotype, os.path.join(out_dir, 'EP{:02d}.gt'.format(epoch+1)))
+        
         # genotype as a image
         dag = model.get_dag()
         if not dag is None:
             plot_path = os.path.join(config.plot_path, "EP{:02d}".format(epoch+1))
             caption = "Epoch {}".format(epoch+1)
             plot(genotype.dag, dag, plot_path + "-dag", caption)
-
-        # save
-        if best_top1 < top1:
-            best_top1 = top1
-            best_genotype = genotype
-            is_best = True
-        else:
-            is_best = False
 
         save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % epoch)
         torch.save({
@@ -155,6 +157,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
     logger.info("Final best Prec@1 = {:.4%}".format(best_top1))
     logger.info("Best Genotype = {}".format(best_genotype))
     tprof.stat_acc('model')
+    gt.to_file(best_genotype, os.path.join(out_dir, 'best.gt'))
 
 
 def train(train_loader, valid_loader, model, writer, logger, architect, w_optim, a_optim, lr, epoch, device, config):

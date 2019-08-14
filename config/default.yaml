@@ -39,19 +39,30 @@ train:
   lr_schduler:
     type: 'cosine'
   w_grad_clip: 5.
-  warmup_epochs: 100
-  epochs: 200
+  warmup_epochs: 1
+  epochs: 1
   print_freq: 50
+  save_freq: 5
   plot_path: './searchs'
+  gt_file: './searchs'
 ---
 valid:
   trn_batch_size: 50
   val_batch_size: 50
   workers: 0
+  epochs: 600
   genotype: ''
   gt_file: ''
-  epochs: 600
-  aux_weight: 0.
+  w_optim:
+    type: 'sgd'
+    lr: 0.025
+    lr_min: 0.001
+    momentum: 0.9
+    weight_decay: 0.0003
+    nesterov: True
+  aux_weight: 0.4
+  drop_path_prob: 0.2
+  verbose: False
 ---
 model:
   type: 'proxyless-nas'
@@ -59,10 +70,11 @@ model:
   channel_in: 3           # 3 for ImageNet/CIFAR10, 1 for MNIST
   channel_init: 16        # init channel
   channel_multiplier: 1   # init channel multiplier
-  groups: 1                # num of nodes (states) per layer
-  blocks: 3              # num of DAG layers (cells) in model
-  alpha: 48.0
+  groups: 3               # num of nodes (states) per layer
+  blocks: 18              # num of DAG layers (cells) in model
+  alpha: 84
   conv_groups: 2
+  bottleneck_ratio: 4
   samples: 1
   w_latency: 0.0
 ---
