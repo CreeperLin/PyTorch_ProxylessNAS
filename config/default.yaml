@@ -39,16 +39,16 @@ train:
   lr_schduler:
     type: 'cosine'
   w_grad_clip: 5.
-  warmup_epochs: 1
-  epochs: 1
+  warmup_epochs: 200
+  epochs: 200
   print_freq: 50
   save_freq: 5
   plot_path: './searchs'
   gt_file: './searchs'
 ---
 valid:
-  trn_batch_size: 50
-  val_batch_size: 50
+  trn_batch_size: 64
+  val_batch_size: 64
   workers: 0
   epochs: 600
   genotype: ''
@@ -60,9 +60,10 @@ valid:
     momentum: 0.9
     weight_decay: 0.0003
     nesterov: True
-  aux_weight: 0.4
+  aux_weight: 0.0
   drop_path_prob: 0.2
-  verbose: False
+  grad_clip: 5.
+  print_freq: 50
 ---
 model:
   type: 'proxyless-nas'
@@ -76,7 +77,8 @@ model:
   conv_groups: 2
   bottleneck_ratio: 4
   samples: 1
-  w_latency: 0.0
+  w_latency: 
+  verbose: False
 ---
 genotypes:
   - 'max_pool_3x3'

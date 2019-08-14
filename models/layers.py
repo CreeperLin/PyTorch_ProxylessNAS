@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import genotypes as gt
-from utils import param_size
+from utils import param_size, param_count
 from profile.profiler import tprof
 from models.nas_modules import NASModule
 
@@ -51,7 +51,7 @@ class MergeFilterLayer(nn.Module):
 
 
 class DAGLayer(nn.Module):
-    def __init__(self, config, n_nodes, chn_in, shared_a,
+    def __init__(self, config, n_nodes, chn_in, stride, shared_a,
                     allocator, merger_state, merger_out, enumerator, preproc, aggregate,
                     edge_cls, edge_kwargs):
         super().__init__()
@@ -93,6 +93,7 @@ class DAGLayer(nn.Module):
                 for sidx in self.enumerator.enum(cur_state, self.n_input_e):
                     e_chn_in = self.allocator.chn_in([chn_states[s] for s in sidx], sidx, cur_state)
                     edge_kwargs['chn_in'] = e_chn_in
+                    edge_kwargs['stride'] = stride if all(s < self.n_input for s in sidx) else 1
                     edge_kwargs['shared_a'] = shared_a
                     e = edge_cls(**edge_kwargs)
                     self.dag[i].append(e)
@@ -113,7 +114,7 @@ class DAGLayer(nn.Module):
             self.merge_filter = None
 
         self.chn_out = self.merger_out.chn_out(chn_states)
-        print('DAGLayer: {}'.format(param_size(self)))
+        print('DAGLayer param count: {:.3f}'.format(param_count(self)))
         
 
     def forward(self, x):
@@ -184,12 +185,15 @@ class DAGLayer(nn.Module):
 
 
 class TreeLayer(nn.Module):
-    def __init__(self, config, n_nodes, chn_in, shared_a,
+    def __init__(self, config, n_nodes, chn_in, stride, shared_a,
                     allocator, merger_out, preproc, aggregate,
                     child_cls, child_kwargs, edge_cls, edge_kwargs,
                     children=None, edges=None):
+        super().__init__()
         self.edges = nn.ModuleList()
-        self.children = nn.ModuleList()
+        self.subnets = nn.ModuleList()
+        chn_in = (chn_in, ) if isinstance(chn_in, int) else chn_in
+        self.n_input = len(chn_in)
         self.n_nodes = n_nodes
         self.n_states = self.n_input + self.n_nodes
         self.allocator = allocator(self.n_input, self.n_nodes)
@@ -211,17 +215,27 @@ class TreeLayer(nn.Module):
         
         sidx = range(self.n_input)
         for i in range(self.n_nodes):
+            e_chn_in = self.allocator.chn_in([chn_states[s] for s in sidx], sidx, i)
             if not edges is None:
                 self.edges.append(edges[i])
-            else:
-                e_chn_in = self.allocator.chn_in([chn_states[s] for s in sidx], sidx, i)
+                c_chn_in = edges[i].chn_out
+            elif not edge_cls is None:
                 edge_kwargs['chn_in'] = e_chn_in
-                edge_kwargs['shared_a'] = shared_a
-                self.edges.append(edge_cls(**edge_kwargs))
-            if not children is None:
-                self.children.append(children[i])
+                edge_kwargs['stride'] = stride
+                if 'shared_a' in edge_kwargs: edge_kwargs['shared_a'] = shared_a
+                e = edge_cls(**edge_kwargs)
+                self.edges.append(e)
+                c_chn_in = e.chn_out
             else:
-                self.children.append(child_cls(**child_kwargs))
+                self.edges.append(None)
+                c_chn_in = e_chn_in
+            if not children is None:
+                self.subnets.append(children[i])
+            elif not child_cls is None:
+                child_kwargs['chn_in'] = c_chn_in
+                self.subnets.append(child_cls(**child_kwargs))
+            else:
+                self.subnets.append(None)
         
         print('TreeLayer: etype:{} ctype:{} chn_in:{} #n/e:{}'.format(str(edge_cls), str(child_cls), chn_in, self.n_nodes))
 
@@ -232,6 +246,7 @@ class TreeLayer(nn.Module):
             self.merge_filter = None
     
     def forward(self, x):
+        x = [x] if not isinstance(x, list) else x
         if self.preprocs is None:
             states = [st for st in x]
         else:
@@ -239,12 +254,12 @@ class TreeLayer(nn.Module):
 
         n_states = self.n_input
         sidx = range(self.n_input)
-        for edge, child in zip(self.edges, self.children):
+        for edge, child in zip(self.edges, self.subnets):
             out = self.allocator.alloc([states[i] for i in sidx], sidx, n_states)
             if not edge is None:
-                out = edges(out)
+                out = edge(out)
             if not child is None:
-                out = child(out)
+                out = child([out])
             states.append(out)
         
         states_f = states if self.merge_filter is None else self.merge_filter(states)

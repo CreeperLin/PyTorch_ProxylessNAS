@@ -8,13 +8,16 @@ class GroupConv(nn.Module):
     """
     def __init__(self, chn_in, chn_out, kernel_size, stride=1, padding=0, groups=1, relu=True, affine=True):
         super().__init__()
+        chn_in = chn_in if isinstance(chn_in, int) else chn_in[0]
         if chn_out is None:
             chn_out = chn_in
+        self.chn_out = chn_out
         self.bn = nn.BatchNorm2d(chn_in, affine=affine)
         self.act = nn.ReLU(inplace=True) if relu else None
         self.conv = nn.Conv2d(chn_in, chn_out, kernel_size, stride, padding, groups=groups, bias=False)
 
     def forward(self, x):
+        x = x[0] if isinstance(x, list) else x
         x = self.bn(x)
         x = x if self.act is None else self.act(x)
         x = self.conv(x)
@@ -36,7 +39,7 @@ class BottleneckBlock(nn.Module):
     def forward(self, x):
 
         out = self.bottle_in(x)
-        out = self.cell(out)
+        out = self.cell([out])
         out = self.bottle_out(out)
         out = self.bn(out)
 
@@ -57,7 +60,6 @@ class BottleneckBlock(nn.Module):
             out += torch.cat((shortcut, padding), 1)
         else:
             out += shortcut 
-
         return out
 
 
@@ -109,7 +111,7 @@ class PyramidNet(nn.Module):
                         bneck_ratio=self.bneck_ratio,
                         cell_cls=cell_cls, cell_kwargs=cell_kwargs)
             layers.append(blk)
-            self.chn_cur += self.addrate
+            self.chn_cur = chn_next
         return nn.Sequential(*layers)
 
     def forward(self, x):

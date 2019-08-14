@@ -289,7 +289,7 @@ class NASController(nn.Module):
             device_ids = list(range(torch.cuda.device_count()))
         self.device_ids = device_ids
         self.ops = ops
-        self.net = net_cls(config, net_kwargs) if net is None else net
+        self.net = net_cls(config, **net_kwargs) if net is None else net
 
     def forward(self, x):
         
@@ -327,10 +327,8 @@ class NASController(nn.Module):
         for handler, formatter in zip(logger.handlers, org_formatters):
             handler.setFormatter(formatter)
 
-    def get_dag(self):
-        if hasattr(self.net, 'dag_layers'):
-            return self.net.dag_layers
-        return None
+    def dags(self):
+        return self.net.dags()
 
     def genotype(self,k=2):
         try:

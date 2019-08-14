@@ -118,7 +118,12 @@ def plot(genotype, dag_layers, file_path, caption=None):
     if caption:
         g.attr(label=caption, overlap='false', fontsize='20', fontname='times')
 
-    g.render(file_path, view=False)
+    try:
+        g.render(file_path, view=False)
+    except:
+        print('render failed')
+        with open(file_path, 'w') as f:
+            f.write(g.source)
 
 
 if __name__ == '__main__':

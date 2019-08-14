@@ -101,10 +101,11 @@ def train(train_loader, model, writer, logger, optim, epoch, lr, device, config)
         N = X.size(0)
 
         optim.zero_grad()
-        logits, aux_logits = model(X)
+        logits = model(X)
         loss = model.criterion(logits, y)
-        if config.aux_weight > 0.:
-            loss += config.aux_weight * model.criterion(aux_logits, y)
+        # logits, aux_logits = model(X)
+        # if config.aux_weight > 0.:
+            # loss += config.aux_weight * model.criterion(aux_logits, y)
         loss.backward()
         # gradient clipping
         nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)

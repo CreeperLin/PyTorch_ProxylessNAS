@@ -135,11 +135,10 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         gt.to_file(genotype, os.path.join(out_dir, 'EP{:02d}.gt'.format(epoch+1)))
         
         # genotype as a image
-        dag = model.get_dag()
-        if not dag is None:
+        for i, dag in enumerate(model.dags()):
             plot_path = os.path.join(config.plot_path, "EP{:02d}".format(epoch+1))
             caption = "Epoch {}".format(epoch+1)
-            plot(genotype.dag, dag, plot_path + "-dag", caption)
+            plot(genotype.dag[i], dag, plot_path + "-dag_{}".format(i), caption)
 
         save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % epoch)
         torch.save({
@@ -183,7 +182,11 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
 
         if not valid_loader is None and step % tr_ratio == 0:
             # phase 2. architect step (alpha)
-            val_X, val_y = next(val_iter)   
+            try:
+                val_X, val_y = next(val_iter)
+            except:
+                val_iter = iter(valid_loader)
+                val_X, val_y = next(val_iter)
             val_X, val_y = val_X.to(device, non_blocking=True), val_y.to(device, non_blocking=True)
             architect.step(trn_X, trn_y, val_X, val_y, lr, w_optim, a_optim)
 

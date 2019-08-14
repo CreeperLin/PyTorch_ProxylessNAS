@@ -76,11 +76,11 @@ def get_pyramidnet_origin(config, device, dev_list):
     alpha = config.alpha
     ops = gt.PRIMITIVES_DEFAULT
     pyramidnet_kwargs = {
-        'config': config,
         'cell_cls': GroupConv,
         'cell_kwargs': {
             'chn_in': None,
             'chn_out': None,
+            'stride': None,
             'kernel_size': 3,
             'padding': 1,
         }
@@ -96,16 +96,13 @@ def get_pyramidnet(config, device, dev_list):
     chn_in = config.channel_in
     chn = config.channel_init
     chn_cur = chn * config.channel_multiplier
-    n_classes = config.classes
-    n_layers = config.layers
     n_nodes = config.nodes
-    n_inputs_model = config.inputs_model
+    conv_groups = config.conv_groups
     n_inputs_layer = config.inputs_layer
     n_inputs_node = config.inputs_node
     ops = gt.PRIMITIVES_DEFAULT
 
     pyramidnet_kwargs = {
-        'config': config,
         'cell_cls': TreeLayer,
         'cell_kwargs': {
             'config': config,
@@ -114,24 +111,27 @@ def get_pyramidnet(config, device, dev_list):
             'shared_a': False,
             'allocator': ReplicateAllocator,
             'merger_out': SumMerger,
-            'preproc': PreprocLayer,
+            'preproc': None,
             'aggregate': None,
-            'edge_cls': BinGateMixedOp,
+            'edge_cls': GroupConv,
             'edge_kwargs': {
-                'config': config,
-                'chn_in': (chn, ) * n_inputs_node,
-                'stride': 1,
-                'ops': ops,
+                'chn_in': None,
+                'chn_out': None,
+                'stride': None,
+                'groups': conv_groups,
+                'kernel_size': 3,
+                'padding': 1,
             },
             'child_cls': TreeLayer,
             'child_kwargs': {
                 'config': config,
                 'n_nodes': n_nodes,
                 'chn_in': (chn_cur, ) * n_inputs_layer,
+                'stride': 1,
                 'shared_a': False,
                 'allocator': ReplicateAllocator,
                 'merger_out': SumMerger,
-                'preproc': PreprocLayer,
+                'preproc': None,
                 'aggregate': None,
                 'edge_cls': BinGateMixedOp,
                 'edge_kwargs': {
@@ -139,16 +139,18 @@ def get_pyramidnet(config, device, dev_list):
                     'chn_in': (chn, ) * n_inputs_node,
                     'stride': 1,
                     'ops': ops,
+                    'shared_a': None,
                 },
                 'child_cls': TreeLayer,
                 'child_kwargs': {
                     'config': config,
                     'n_nodes': n_nodes,
                     'chn_in': (chn_cur, ) * n_inputs_layer,
+                    'stride': 1,
                     'shared_a': False,
                     'allocator': ReplicateAllocator,
                     'merger_out': SumMerger,
-                    'preproc': PreprocLayer,
+                    'preproc': None,
                     'aggregate': None,
                     'edge_cls': BinGateMixedOp,
                     'edge_kwargs': {
@@ -156,6 +158,7 @@ def get_pyramidnet(config, device, dev_list):
                         'chn_in': (chn, ) * n_inputs_node,
                         'stride': 1,
                         'ops': ops,
+                        'shared_a': None,
                     },
                     'child_cls': None,
                     'child_kwargs': {},
@@ -165,7 +168,7 @@ def get_pyramidnet(config, device, dev_list):
     }
     criterion = nn.CrossEntropyLoss().to(device)
     model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
-                        dev_list, PyramidNet, pyramidnet_kwargs).to(device)
+                        dev_list, PyramidNet, pyramidnet_kwargs, net=None).to(device)
     arch = BinaryGateArchitect
     return model, arch
 
@@ -182,36 +185,41 @@ def get_dagnet(config, device, dev_list):
     ops = gt.PRIMITIVES_DEFAULT
 
     dagnet_kwargs = {
-        'config': config,
-        'n_nodes': n_layers,
-        'chn_in': (chn_cur, ) * n_inputs_model,
-        'shared_a': False,
-        'allocator': ReplicateAllocator,
-        'merger_state': SumMerger,
-        'merger_out': LastMerger,
-        'enumerator': LastNEnumerator,
-        'preproc': None,
-        'aggregate': None,
-        'edge_cls': DAGLayer,
-        'edge_kwargs': {
+        'dag_kwargs': {
             'config': config,
-            'n_nodes': n_nodes,
-            'chn_in': (chn_cur, ) * n_inputs_layer,
+            'n_nodes': n_layers,
+            'chn_in': (chn_cur, ) * n_inputs_model,
+            'stride': 1,
             'shared_a': False,
             'allocator': ReplicateAllocator,
             'merger_state': SumMerger,
-            'merger_out': ConcatMerger,
+            'merger_out': SumMerger,
             'enumerator': CombinationEnumerator,
-            'preproc': PreprocLayer,
+            'preproc': None,
             'aggregate': None,
-            'edge_cls': BinGateMixedOp,
+            'edge_cls': DAGLayer,
             'edge_kwargs': {
                 'config': config,
-                'chn_in': (chn, ) * n_inputs_node,
+                'n_nodes': n_nodes,
+                'chn_in': (chn_cur, ) * n_inputs_layer,
                 'stride': 1,
-                'ops': ops,
-            },
-        }
+                'shared_a': False,
+                'allocator': ReplicateAllocator,
+                'merger_state': SumMerger,
+                'merger_out': SumMerger,
+                'enumerator': CombinationEnumerator,
+                'preproc': PreprocLayer,
+                'aggregate': None,
+                'edge_cls': BinGateMixedOp,
+                'edge_kwargs': {
+                    'config': config,
+                    'chn_in': (chn, ) * n_inputs_node,
+                    'stride': 1,
+                    'ops': ops,
+                    'shared_a': None,
+                },
+            }
+        },
     }
     criterion = nn.CrossEntropyLoss().to(device)
     model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
@@ -231,36 +239,37 @@ def get_dartslike(config, device, dev_list):
     n_inputs_node = config.inputs_node
     ops = gt.PRIMITIVES_DEFAULT
     darts_kwargs = {
-        'config': config,
-        'n_nodes': n_layers,
-        'chn_in': (chn_cur, ) * n_inputs_model,
-        'shared_a': True,
-        'allocator': ReplicateAllocator,
-        'merger_state': SumMerger,
-        'merger_out': LastMerger,
-        'enumerator': LastNEnumerator,
-        'preproc': None,
-        'aggregate': None,
-        'edge_cls': DAGLayer,
-        'edge_kwargs': {
-            'config': config,
-            'n_nodes': n_nodes,
-            'chn_in': (chn_cur, ) * n_inputs_layer,
-            'shared_a': False,
+        'dag_kwargs':{
+            'n_nodes': n_layers,
+            'chn_in': (chn_cur, ) * n_inputs_model,
+            'shared_a': True,
             'allocator': ReplicateAllocator,
             'merger_state': SumMerger,
-            'merger_out': ConcatMerger,
-            'enumerator': CombinationEnumerator,
-            'preproc': PreprocLayer,
+            'merger_out': LastMerger,
+            'enumerator': LastNEnumerator,
+            'preproc': None,
             'aggregate': None,
-            'edge_cls': DARTSMixedOp,
+            'edge_cls': DAGLayer,
             'edge_kwargs': {
                 'config': config,
-                'chn_in': (chn, ) * n_inputs_node,
-                'stride': 1,
-                'ops': ops,
-            },
-        }
+                'n_nodes': n_nodes,
+                'chn_in': (chn_cur, ) * n_inputs_layer,
+                'shared_a': False,
+                'allocator': ReplicateAllocator,
+                'merger_state': SumMerger,
+                'merger_out': ConcatMerger,
+                'enumerator': CombinationEnumerator,
+                'preproc': PreprocLayer,
+                'aggregate': None,
+                'edge_cls': DARTSMixedOp,
+                'edge_kwargs': {
+                    'config': config,
+                    'chn_in': (chn, ) * n_inputs_node,
+                    'stride': 1,
+                    'ops': ops,
+                },
+            }
+        },
     }
     criterion = nn.CrossEntropyLoss().to(device)
     model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
