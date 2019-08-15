@@ -123,15 +123,6 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         # genotype
         genotype = model.genotype()
         logger.info("genotype = {}".format(genotype))
-        
-        if best_top1 < top1:
-            best_top1 = top1
-            best_genotype = genotype
-
-        if epoch % config.save_freq != 0:
-            print("")
-            continue
-        
         gt.to_file(genotype, os.path.join(out_dir, 'EP{:02d}.gt'.format(epoch+1)))
         
         # genotype as a image
@@ -139,7 +130,15 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
             plot_path = os.path.join(config.plot_path, "EP{:02d}".format(epoch+1))
             caption = "Epoch {}".format(epoch+1)
             plot(genotype.dag[i], dag, plot_path + "-dag_{}".format(i), caption)
+        
+        if best_top1 < top1:
+            best_top1 = top1
+            best_genotype = genotype
 
+        if config.save_freq == 0 or epoch % config.save_freq != 0:
+            print("")
+            continue
+        
         try:
             save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % epoch)
             torch.save({
@@ -183,16 +182,6 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
         trn_X, trn_y = trn_X.to(device, non_blocking=True), trn_y.to(device, non_blocking=True)
         N = trn_X.size(0)
 
-        if not valid_loader is None and step % tr_ratio == 0:
-            # phase 2. architect step (alpha)
-            try:
-                val_X, val_y = next(val_iter)
-            except:
-                val_iter = iter(valid_loader)
-                val_X, val_y = next(val_iter)
-            val_X, val_y = val_X.to(device, non_blocking=True), val_y.to(device, non_blocking=True)
-            architect.step(trn_X, trn_y, val_X, val_y, lr, w_optim, a_optim)
-
         # phase 1. child network step (w)
         w_optim.zero_grad()
         logits = model(trn_X)
@@ -201,6 +190,16 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
         # gradient clipping
         nn.utils.clip_grad_norm_(model.weights(), config.w_grad_clip)
         w_optim.step()
+        
+        # phase 2. architect step (alpha)
+        if not valid_loader is None and step % tr_ratio == 0:
+            try:
+                val_X, val_y = next(val_iter)
+            except:
+                val_iter = iter(valid_loader)
+                val_X, val_y = next(val_iter)
+            val_X, val_y = val_X.to(device, non_blocking=True), val_y.to(device, non_blocking=True)
+            architect.step(trn_X, trn_y, val_X, val_y, lr, w_optim, a_optim)
 
         prec1, prec5 = utils.accuracy(logits, trn_y, topk=(1, 5))
         losses.update(loss.item(), N)

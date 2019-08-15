@@ -29,7 +29,7 @@ class NASModule(nn.Module):
     def __init__(self, config, params_shape, shared_p=True):
         super().__init__()
         self.id = self.get_new_id()
-        if shared_p and not NASModule.new_shared_p:
+        if config.augment or shared_p and not NASModule.new_shared_p:
             self.pid = NASModule._param_id
         else:
             self.pid = NASModule.add_param(params_shape)
@@ -40,6 +40,10 @@ class NASModule(nn.Module):
     @staticmethod
     def set_device(dev_list):
         NASModule._dev_list = dev_list if len(dev_list)>0 else [None]
+    
+    @staticmethod
+    def get_device():
+        return NASModule._dev_list
 
     @staticmethod
     def get_new_id():
@@ -61,7 +65,7 @@ class NASModule(nn.Module):
     @staticmethod
     def add_module(module, mid, pid):
         NASModule._modules.append(module)
-        NASModule._params_map[pid].append(mid)
+        if pid >= 0: NASModule._params_map[pid].append(mid)
     
     @staticmethod
     def param_forward(params=None):
@@ -81,6 +85,16 @@ class NASModule(nn.Module):
             yield m
     
     @staticmethod
+    def param_modules():
+        mmap = NASModule._modules
+        pmap = NASModule._params_map
+        plist = NASModule._params
+        for pid in pmap:
+            mlist = pmap[pid]
+            for mid in mlist:
+                yield (plist[pid], mmap[pid])
+    
+    @staticmethod
     def params_grad(loss):
         mmap = NASModule._modules
         pmap = NASModule._params_map
@@ -92,10 +106,37 @@ class NASModule(nn.Module):
             yield p_grad
     
     @staticmethod
+    def param_backward(loss):
+        mmap = NASModule._modules
+        pmap = NASModule._params_map
+        for pid in pmap:
+            mlist = pmap[pid]
+            p_grad = mmap[mlist[0]].param_grad(loss)
+            for i in range(1,len(mlist)):
+                p_grad += mmap[mlist[i]].param_grad(loss)
+            NASModule._params[pid].grad = p_grad
+    
+    @staticmethod
     def params():
         for p in NASModule._params:
             yield p
     
+    @staticmethod
+    def module_apply(func, **kwargs):
+        return [func(m, **kwargs) for m in NASModule._modules]
+    
+    @staticmethod
+    def module_call(func, **kwargs):
+        return [getattr(m, func)(**kwargs) for m in NASModule._modules]
+    
+    @staticmethod
+    def param_module_call(func, **kwargs):
+        mmap = NASModule._modules
+        pmap = NASModule._params_map
+        for pid in pmap:
+            for mid in pmap[pid]:
+                getattr(mmap[mid], func)(NASModule._params[pid], **kwargs)
+
     def get_param(self):
         return NASModule._params[self.pid]
     
@@ -114,19 +155,8 @@ class NASModule(nn.Module):
         del self.state_dict()[name]
     
     @staticmethod
-    def param_backward(loss):
-        mmap = NASModule._modules
-        pmap = NASModule._params_map
-        for pid in pmap:
-            mlist = pmap[pid]
-            p_grad = mmap[mlist[0]].param_grad(loss)
-            for i in range(1,len(mlist)):
-                p_grad += mmap[mlist[i]].param_grad(loss)
-            NASModule._params[pid].grad = p_grad
-    
-    @staticmethod
-    def build_from_genotype(gene, kwargs=None):
-        for m, g in zip(NASModule._modules, gene):
+    def build_from_genotype(gene, kwargs={}):
+        for m, g in zip(NASModule._modules, gene.ops):
             m.build_from_genotype(g, **kwargs)
     
     @staticmethod
@@ -185,19 +215,31 @@ class BinGateMixedOp(NASModule):
         self._ops = nn.ModuleList()
         self.n_samples = config.samples
         self.w_lat = config.w_latency
+        self.stride = stride
         if not config.augment:
             self.fixed = False
             for primitive in ops:
                 op = OPS[primitive](self.chn_in, stride, affine=False)
                 self._ops.append(op)
+            print("BinGateMixedOp: chn_in:{} stride:{} #p:{:.6f}".format(self.chn_in, stride, param_count(self)))
+        else:
+            self.fixed = True
         self.params_shape = params_shape
         self.chn_out = self.chn_in
-        print("BinGateMixedOp: chn_in:{} stride:{} F:{} #p:{:.6f}".format(self.chn_in, stride, self.fixed, param_count(self)))
+        self.reset_ops()
     
     def param_forward(self, p, requires_grad=False):
-        w_path = F.softmax(p, dim=-1)
+        s_op = self.get_state('s_op')
+        w_path = F.softmax(p.index_select(-1, s_op), dim=-1)
         self.set_state('w_path_f', w_path.detach())
-        self.set_state('s_path_f', w_path.multinomial(self.n_samples).detach())
+        self.set_state('s_path_f', s_op.index_select(-1, w_path.multinomial(self.n_samples).detach()))
+    
+    def sample_ops(self, p, n_samples=0):
+        s_op = F.softmax(p, dim=-1).multinomial(n_samples).detach()
+        self.set_state('s_op', s_op)
+    
+    def reset_ops(self):
+        self.set_state('s_op', torch.arange(len(self._ops), dtype=torch.long))
     
     def forward(self, x):
         if self.in_deg != 1:
@@ -237,33 +279,43 @@ class BinGateMixedOp(NASModule):
                     p.grad = None
 
     def param_grad(self, loss):
-        dev_id = loss.device.index
+        a_grad = 0
+        for dev in NASModule.get_device():
+            a_grad = self.param_grad_dev(loss, dev) + a_grad
+        return a_grad
+    
+    def param_grad_dev(self, loss, dev_id):
         dev_id = '_' if dev_id is None else str(dev_id)
         with torch.no_grad():
-            samples = range(len(self._ops))
+            sample_ops = self.get_state('s_op')
             a_grad = torch.zeros(self.params_shape)
             m_out = self.get_state('m_out'+dev_id)
             y_grad = (torch.autograd.grad(loss, m_out, retain_graph=True)[0]).detach()
             m_out.detach_()
             x_f = self.get_state('x_f'+dev_id)
             w_path_f = self.get_state('w_path_f')
-            for j in samples:
-                op = self._ops[j].to(device=x_f.device)
-                op_out = op(x_f)
-                op_out.detach_()
-                op.to(device='cpu')
+            s_path_f = self.get_state('s_path_f')
+            for j, oj in enumerate(sample_ops):
+                if oj in s_path_f:
+                    op_out = m_out
+                else:
+                    op = self._ops[oj].to(device=x_f.device)
+                    op_out = op(x_f)
+                    op_out.detach_()
+                    op.to(device='cpu')
                 g_grad = torch.sum(torch.mul(y_grad, op_out))
                 g_grad.detach_()
                 mid = str(self.id) + '_' + str(int(j))
-                lat_term = 0 if self.w_lat is None else tprof.avg(mid) * self.w_lat
-                for i in range(self.params_shape[0]):
+                lat_term = 0 if self.w_lat == 0 else tprof.avg(mid) * self.w_lat
+                for i, oi in enumerate(sample_ops):
                     kron = 1 if i==j else 0
-                    a_grad[i] += (g_grad + lat_term) * w_path_f[j] * (kron - w_path_f[i])
+                    a_grad[oi] += (g_grad + lat_term) * w_path_f[j] * (kron - w_path_f[i])
             a_grad.detach_()
         return a_grad
     
     def to_genotype(self, k, ops):
         # assert ops[-1] == 'none'
+        if self.pid == -1: return -1, None
         w = F.softmax(self.get_param().detach(), dim=-1)
         w_max, prim_idx = torch.topk(w, 1)
         gene = [ops[i] for i in prim_idx if ops[i]!='none']
@@ -272,7 +324,7 @@ class BinGateMixedOp(NASModule):
     
     def build_from_genotype(self, gene, drop_path=True):
         op_name = gene[0]
-        op = OPS[op_name](self.chn_in, stride=1, affine=True)
+        op = OPS[op_name](self.chn_in, stride=self.stride, affine=True)
         if drop_path and not isinstance(op, Identity): # Identity does not use drop path
             op = nn.Sequential(
                 op,
@@ -280,6 +332,7 @@ class BinGateMixedOp(NASModule):
             )
         self.op = op.to(device='cuda')
         self.fixed = True
+        print("BinGateMixedOp: chn_in:{} stride:{} op:{} #p:{:.6f}".format(self.chn_in, self.stride, op_name, param_count(self)))
 
 
 class NASController(nn.Module):
@@ -287,6 +340,7 @@ class NASController(nn.Module):
         super().__init__()
         self.n_samples = config.samples
         self.criterion = criterion
+        self.augment = config.augment
         if device_ids is None:
             device_ids = list(range(torch.cuda.device_count()))
         self.device_ids = device_ids
@@ -295,7 +349,7 @@ class NASController(nn.Module):
 
     def forward(self, x):
         
-        NASModule.param_forward()
+        if not self.augment: NASModule.param_forward()
         tprof.begin_acc_item('model')
         
         if len(self.device_ids) <= 1:

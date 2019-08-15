@@ -10,7 +10,7 @@ from profile.profiler import tprof
 
 
 class BinGateNet(nn.Module):
-    def __init__(self, config, dag_kwargs):
+    def __init__(self, config, groups, dag_kwargs):
         super().__init__()
         self.chn_in = config.channel_in
         self.chn = config.channel_init
@@ -36,7 +36,7 @@ class BinGateNet(nn.Module):
         chn_in, chn_cur = chn_cur, self.chn
 
         self.dag_layers = nn.ModuleList()
-        for i in range(3):
+        for i in range(groups):
             stride = 1 if i==0 else 2
             dag_kwargs['stride'] = stride
             dag_kwargs['chn_in'] = (chn_in, ) * self.n_inputs_model
@@ -59,6 +59,10 @@ class BinGateNet(nn.Module):
         y = self.fc(y)
         # tprof.stat_acc('model')
         return y
+    
+    def build_from_genotype(self, gene, drop_path=True):
+        for dag, g in zip(self.dag_layers, gene.dag):
+            dag.build_from_genotype(g, )
     
     def to_genotype(self, k, ops):
         gene = []

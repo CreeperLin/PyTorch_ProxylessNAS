@@ -8,7 +8,7 @@ from models.proxylessnas import ProxylessNASNet
 from models.layers import DAGLayer, TreeLayer,\
                         PreprocLayer, MergeFilterLayer
 from models.nas_modules import DARTSMixedOp, BinGateMixedOp,\
-                                NASController
+                                NASController, NASModule
 from models.defs import ConcatMerger, SumMerger, LastMerger, SumMerger,\
                         CombinationEnumerator, LastNEnumerator,\
                         TreeEnumerator, FirstNEnumerator,\
@@ -186,6 +186,7 @@ def get_dagnet(config, device, dev_list):
     ops = gt.PRIMITIVES_DEFAULT
 
     dagnet_kwargs = {
+        'groups': config.groups,
         'dag_kwargs': {
             'config': config,
             'n_nodes': n_layers,
@@ -293,12 +294,14 @@ def get_model(config, device, dev_list, genotype=None):
         config.augment = not genotype is None
         model, arch = model_creator[mtype](config, device, dev_list)
         if config.augment:
+            print("genotype = {}".format(genotype))
             model.build_from_genotype(genotype)
-            print("genotype = {}".format(model.genotype()))
+            model.to(device=device)
         if config.verbose: print(model)
         mb_params = param_size(model)
         n_params = param_count(model)
         print("Model params count: {:.3f} M, size: {:.3f} MB".format(n_params, mb_params))
+        NASModule.set_device(dev_list)
         return model, arch
     else:
         raise Exception("invalid model type")

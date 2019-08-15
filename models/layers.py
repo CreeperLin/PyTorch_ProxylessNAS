@@ -59,6 +59,7 @@ class DAGLayer(nn.Module):
         self.edge_id = edge_id
         edge_id+=1
         self.n_nodes = n_nodes
+        self.chn_in = chn_in
         self.n_input = len(chn_in)
         self.n_states = self.n_input + self.n_nodes
         self.n_input_e = len(edge_kwargs['chn_in'])
@@ -100,22 +101,20 @@ class DAGLayer(nn.Module):
                     self.edges.append(e)
                 self.num_edges += num_edges
                 chn_states.append(self.merger_state.chn_out([ei.chn_out for ei in self.dag[i]]))
+                self.chn_out = self.merger_out.chn_out(chn_states)
+            print('DAGLayer: etype:{} chn_in:{} #n:{} #e:{}'.format(str(edge_cls), self.chn_in, self.n_nodes, self.num_edges))
+            print('DAGLayer param count: {:.6f}'.format(param_count(self)))
         else:
             self.chn_states = chn_states
             self.edge_cls = edge_cls
             self.edge_kwargs = edge_kwargs
-        
-        print('DAGLayer: etype:{} chn_in:{} #n:{} #e:{}'.format(str(edge_cls), chn_in, self.n_nodes, self.num_edges))
 
         if aggregate is not None:
             self.merge_filter = aggregate(n_in=self.n_input+self.n_nodes,
                                         n_out=self.n_input+self.n_nodes//2)
         else:
             self.merge_filter = None
-
         self.chn_out = self.merger_out.chn_out(chn_states)
-        print('DAGLayer param count: {:.6f}'.format(param_count(self)))
-        
 
     def forward(self, x):
         if self.preprocs is None:
@@ -172,6 +171,7 @@ class DAGLayer(nn.Module):
         chn_states = self.chn_states
         edge_cls = self.edge_cls
         edge_kwargs = self.edge_kwargs
+        num_edges = 0
         for edges in gene:
             row = nn.ModuleList()
             for g_child, sidx, n_states in edges:
@@ -181,7 +181,14 @@ class DAGLayer(nn.Module):
                 e = edge_cls(**edge_kwargs)
                 e.build_from_genotype(g_child)
                 row.append(e)
+                num_edges += 1
             self.dag.append(row)
+            chn_states.append(self.merger_state.chn_out([ei.chn_out for ei in row]))
+        self.num_edges = num_edges
+        self.chn_states = chn_states
+        self.chn_out = self.merger_out.chn_out(chn_states)
+        print('DAGLayer: etype:{} chn_in:{} #n:{} #e:{}'.format(str(edge_cls), self.chn_in, self.n_nodes, self.num_edges))
+        print('DAGLayer param count: {:.6f}'.format(param_count(self)))
 
 
 class TreeLayer(nn.Module):
@@ -266,3 +273,6 @@ class TreeLayer(nn.Module):
 
         out = self.merger_out.merge(states_f)
         return out
+    
+    def build_from_genotype(self, gene):
+        pass

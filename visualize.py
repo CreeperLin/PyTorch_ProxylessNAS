@@ -57,7 +57,7 @@ def subplot(genotype, prefix, dag_layers):
     for i, edges in enumerate(genotype):
         for g_child, sidx, n_state in edges:
             v = g_nodes[n_state-n_input]
-            if len(g_child)==1:
+            if isinstance(g_child[0], str):
                 op = g_child[0]
             else:
                 p_child, n_in, n_out = subplot(g_child, str(prefix)+str(j)+'_', dag_layers.edges[0])
@@ -70,7 +70,7 @@ def subplot(genotype, prefix, dag_layers):
                     u = g_in[si]
                 else:
                     u = g_nodes[si-n_input]
-                if len(g_child)==1:
+                if isinstance(g_child[0], str):
                     g.edge(u, v, label=acronym[op], fillcolor="gray")
                 else:
                     g.edge(u, n_in[i], label='', fillcolor="gray")          

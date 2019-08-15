@@ -77,7 +77,7 @@ model:
   conv_groups: 2
   bottleneck_ratio: 4
   samples: 1
-  w_latency: 
+  w_latency: 0
   verbose: False
 ---
 genotypes:
@@ -85,7 +85,7 @@ genotypes:
   - 'skip_connect' # identity
   - 'sep_conv_3x3'
   - 'sep_conv_5x5'
-  - 'sep_conv_7x7',
+  - 'sep_conv_7x7'
   - 'avg_pool_3x3'
   - 'max_pool_3x3'
   # - 'dil_conv_5x5'
