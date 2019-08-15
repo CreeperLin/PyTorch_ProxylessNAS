@@ -76,6 +76,7 @@ def get_pyramidnet_origin(config, device, dev_list):
     alpha = config.alpha
     ops = gt.PRIMITIVES_DEFAULT
     pyramidnet_kwargs = {
+        'config': config,
         'cell_cls': GroupConv,
         'cell_kwargs': {
             'chn_in': None,

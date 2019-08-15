@@ -114,7 +114,7 @@ class DAGLayer(nn.Module):
             self.merge_filter = None
 
         self.chn_out = self.merger_out.chn_out(chn_states)
-        print('DAGLayer param count: {:.3f}'.format(param_count(self)))
+        print('DAGLayer param count: {:.6f}'.format(param_count(self)))
         
 
     def forward(self, x):
@@ -237,13 +237,13 @@ class TreeLayer(nn.Module):
             else:
                 self.subnets.append(None)
         
-        print('TreeLayer: etype:{} ctype:{} chn_in:{} #n/e:{}'.format(str(edge_cls), str(child_cls), chn_in, self.n_nodes))
-
         if aggregate is not None:
             self.merge_filter = aggregate(n_in=self.n_states,
                                         n_out=self.n_states//2)
         else:
             self.merge_filter = None
+        
+        print('TreeLayer: etype:{} ctype:{} chn_in:{} #node:{} #p:{:.6f}'.format(str(edge_cls), str(child_cls), chn_in, self.n_nodes, param_count(self)))
     
     def forward(self, x):
         x = [x] if not isinstance(x, list) else x

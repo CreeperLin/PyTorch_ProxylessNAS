@@ -8,6 +8,7 @@ import genotypes as gt
 from models.ops import OPS, Identity, DropPath_
 from profile.profiler import tprof
 from torch.nn.parallel._functions import Broadcast
+from utils import param_size, param_count
 
 def broadcast_list(l, device_ids):
     """ Broadcasting list """
@@ -191,6 +192,7 @@ class BinGateMixedOp(NASModule):
                 self._ops.append(op)
         self.params_shape = params_shape
         self.chn_out = self.chn_in
+        print("BinGateMixedOp: chn_in:{} stride:{} F:{} #p:{:.6f}".format(self.chn_in, stride, self.fixed, param_count(self)))
     
     def param_forward(self, p, requires_grad=False):
         w_path = F.softmax(p, dim=-1)

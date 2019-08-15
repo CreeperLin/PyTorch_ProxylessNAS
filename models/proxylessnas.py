@@ -12,6 +12,7 @@ import math
 import torch
 import torch.nn as nn
 from models.nas_modules import NASModule
+from utils import param_count
 
 def cuda_available():
 	return torch.cuda.is_available()
@@ -217,7 +218,7 @@ class BasicBlockWiseConvNet(nn.Module):
 		while batch_num < nBatch:
 			for _input, target in data_loader:
 				if torch.cuda.is_available():
-					target = target.cuda(async=True)
+					target = target.cuda(non_blocking=True)
 					_input = _input.cuda()
 				input_var = torch.autograd.Variable(_input, volatile=True)
 				
@@ -1408,6 +1409,7 @@ class FixedTreeCell(nn.Module):
 		                out_channels=C_in, split_type='copy', merge_type='add',
 		                path_drop_rate=path_drop_rate, use_zero_drop=use_zero_drop,
 		                drop_only_add=drop_only_add)
+		print('FixedTreeCell: chn_in:{} #p:{:.3f}'.format(C_in, param_count(self)))
 	
 	def forward(self, x):
 		return self.root(x)

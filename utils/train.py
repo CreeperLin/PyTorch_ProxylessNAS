@@ -140,16 +140,19 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
             caption = "Epoch {}".format(epoch+1)
             plot(genotype.dag[i], dag, plot_path + "-dag_{}".format(i), caption)
 
-        save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % epoch)
-        torch.save({
-            'model': model.state_dict(),
-            'w_optim': w_optim.state_dict(),
-            'a_optim': a_optim.state_dict(),
-            'lr_scheduler': lr_scheduler.state_dict(),
-            'epoch': epoch,
-            # 'hp_str': hp_str,
-        }, save_path)
-        logger.info("Saved checkpoint to: %s" % save_path)
+        try:
+            save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % epoch)
+            torch.save({
+                'model': model.state_dict(),
+                'w_optim': w_optim.state_dict(),
+                'a_optim': a_optim.state_dict(),
+                'lr_scheduler': lr_scheduler.state_dict(),
+                'epoch': epoch,
+                # 'hp_str': hp_str,
+            }, save_path)
+            logger.info("Saved checkpoint to: %s" % save_path)
+        except:
+            logger.info("Save failed")
 
         print("")
         

@@ -8,6 +8,7 @@ class GroupConv(nn.Module):
     """
     def __init__(self, chn_in, chn_out, kernel_size, stride=1, padding=0, groups=1, relu=True, affine=True):
         super().__init__()
+        # print(groups)
         chn_in = chn_in if isinstance(chn_in, int) else chn_in[0]
         if chn_out is None:
             chn_out = chn_in
@@ -75,15 +76,19 @@ class PyramidNet(nn.Module):
         self.conv_groups = config.conv_groups
         self.bneck_ratio = config.bottleneck_ratio
         self.addrate = config.alpha / (self.n_groups*self.n_blocks*1.0)
+        print(self.addrate)
         
         block = BottleneckBlock
         self.chn_cur = self.chn
         self.conv1 = nn.Conv2d(self.chn_in, self.chn_cur, kernel_size=3, stride=1, padding=1,bias=False)
         self.bn1 = nn.BatchNorm2d(self.chn_cur)
+        self.chn_in = self.chn_cur
         
-        self.groups = nn.ModuleList((self.pyramidal_make_layer(block, self.n_blocks, 1, cell_cls, cell_kwargs), ))
-        for i in range(1, self.n_groups):
-            self.groups.append(self.pyramidal_make_layer(block, self.n_blocks, 2, cell_cls, cell_kwargs))
+        groups = []
+        for i in range(0, self.n_groups):
+            stride = 1 if i==0 else 2
+            groups.append(self.pyramidal_make_layer(block, self.n_blocks, stride, cell_cls, cell_kwargs))
+        self.pyramid = nn.Sequential(*groups)
         
         self.chn_fin = int(round(self.chn_cur)) * self.bneck_ratio
         self.bn_final= nn.BatchNorm2d(self.chn_fin)
@@ -98,28 +103,28 @@ class PyramidNet(nn.Module):
             downsample = nn.AvgPool2d((2,2), stride = (2, 2), ceil_mode=True)
 
         layers = []
-        chn_prev = int(round(self.chn_cur)) * self.bneck_ratio if stride == 2 else int(round(self.chn_cur))
-        self.chn_cur += self.addrate
-        layers.append(block(chn_prev, int(round(self.chn_cur)), stride, groups=self.conv_groups,
-                    bneck_ratio=self.bneck_ratio,
-                    downsample=downsample, cell_cls=cell_cls, cell_kwargs=cell_kwargs))
-        for i in range(1, n_blocks):
+        for i in range(0, n_blocks):
+            b_stride = stride if i==0 else 1
+            chn_prev = int(round(self.chn_in))
             chn_next = int(round(self.chn_cur + self.addrate))
             chn_next -= chn_next % self.conv_groups
-            blk = block(int(round(self.chn_cur)) * self.bneck_ratio,
-                        chn_next, stride=1, groups=self.conv_groups,
+            blk = block(chn_prev, chn_next,
+                        stride=b_stride,
+                        groups=self.conv_groups,
                         bneck_ratio=self.bneck_ratio,
+                        downsample=downsample,
                         cell_cls=cell_cls, cell_kwargs=cell_kwargs)
             layers.append(blk)
-            self.chn_cur = chn_next
+            self.chn_cur += self.addrate
+            self.chn_in = chn_next * self.bneck_ratio
+            downsample = None
         return nn.Sequential(*layers)
 
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         
-        for g in self.groups:
-            x = g(x)
+        x = self.pyramid(x)
 
         x = self.bn_final(x)
         x = self.relu_final(x)
