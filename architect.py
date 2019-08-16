@@ -175,10 +175,14 @@ class BinaryGateArchitect():
             loss = self.net.loss(val_X, val_y)
             # loss.backward()
             # self.net.alpha_backward(loss)
+            m_out_dev = []
             for dev_id in NASModule.get_device():
                 m_out = [m.get_state('m_out'+dev_id) for m in NASModule.modules()]
-                m_grad = torch.autograd.grad(loss, m_out)
-                NASModule.param_backward_from_grad(m_grad, dev_id)
+                m_len = len(m_out)
+                m_out_dev.extend(m_out)
+            m_grad = torch.autograd.grad(loss, m_out_dev)
+            for i, dev_id in enumerate(NASModule.get_device()):
+                NASModule.param_backward_from_grad(m_grad[i*m_len:(i+1)*m_len], dev_id)
         else:
             # do virtual step (calc w`)
             self.virtual_step(trn_X, trn_y, xi, w_optim)

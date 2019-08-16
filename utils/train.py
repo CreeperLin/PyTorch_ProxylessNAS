@@ -16,6 +16,21 @@ from visualize import plot
 from profile.profiler import tprof
 import genotypes as gt
 
+def save_checkpoint(out_dir, model, w_optim, a_optim, lr_scheduler, epoch, logger):
+    try:
+        save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % epoch)
+        torch.save({
+            'model': model.state_dict(),
+            'w_optim': w_optim.state_dict(),
+            'a_optim': a_optim.state_dict(),
+            'lr_scheduler': lr_scheduler.state_dict(),
+            'epoch': epoch,
+            # 'hp_str': hp_str,
+        }, save_path)
+        logger.info("Saved checkpoint to: %s" % save_path)
+    except:
+        logger.info("Save failed")
+
 def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, logger, device, config):
 
     if config.split:
@@ -100,6 +115,8 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
             print("")
     except KeyboardInterrupt:
         print('skipped')
+    
+    save_checkpoint(out_dir, model, w_optim, a_optim, lr_scheduler, init_epoch, logger)
 
     # training loop
     logger.info('w/a training begin')
@@ -139,19 +156,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
             print("")
             continue
         
-        try:
-            save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % epoch)
-            torch.save({
-                'model': model.state_dict(),
-                'w_optim': w_optim.state_dict(),
-                'a_optim': a_optim.state_dict(),
-                'lr_scheduler': lr_scheduler.state_dict(),
-                'epoch': epoch,
-                # 'hp_str': hp_str,
-            }, save_path)
-            logger.info("Saved checkpoint to: %s" % save_path)
-        except:
-            logger.info("Save failed")
+        save_checkpoint(out_dir, model, w_optim, a_optim, lr_scheduler, epoch, logger)
 
         print("")
         
@@ -184,7 +189,9 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
 
         # phase 1. child network step (w)
         w_optim.zero_grad()
+        tprof.timer_start('search-train')
         logits = model(trn_X)
+        tprof.timer_stop('search-train')
         loss = model.criterion(logits, trn_y)
         loss.backward()
         # gradient clipping
@@ -222,4 +229,5 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
 
     logger.info("Train: [{:2d}/{}] Final Prec@1 {:.4%}".format(epoch+1, tot_epochs, top1.avg))
     tprof.stat_acc('model')
+    tprof.timer_stop('search-train')
     tprof.print_stat('arch')

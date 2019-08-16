@@ -5,6 +5,15 @@ import time
 import torch
 from functools import wraps
 
+t0 = 0
+def report_time(msg=''):
+    global t0
+    t1 = time.clock()
+    fr = sys._getframe(1)
+    print ("CPU Time: {} {} @ {} : {:.3f} dt: {:.3f} sec".format(
+        msg.center(20,' '), fr.f_code.co_name, fr.f_lineno, t1, t1 - t0))
+    t0 = t1
+
 m0 = 0
 def report_mem(msg=''):
     global m0

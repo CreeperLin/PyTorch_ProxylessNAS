@@ -38,6 +38,21 @@ class NASModule(nn.Module):
         print('reg NAS module: {} {}'.format(self.id, self.pid))
     
     @staticmethod
+    def state_dict():
+        return {
+            '_modules': NASModule._modules,
+            '_params': NASModule._params,
+            '_module_id': NASModule._module_id,
+            '_module_state_dict': NASModule._module_state_dict,
+            '_param_id': NASModule._param_id,
+            '_params_map': NASModule._params_map
+        }
+    
+    @staticmethod
+    def load_state_dict(dict):
+        pass
+
+    @staticmethod
     def set_device(dev_list):
         dev_list = dev_list if len(dev_list)>0 else [None]
         NASModule._dev_list = [NASModule.get_dev_id(d) for d in dev_list]
@@ -288,12 +303,12 @@ class BinGateMixedOp(NASModule):
     def swap_ops(self, samples, device):
         for i, op in enumerate(self._ops):
             if i in samples:
-                op.to(device=device)
+                # op.to(device=device)
                 for p in op.parameters():
                     if not p.is_leaf: continue
                     p.requires_grad = True
             else:
-                op.to(device='cpu')
+                # op.to(device='cpu')
                 for p in op.parameters():
                     if not p.is_leaf: continue
                     p.requires_grad = False
@@ -314,6 +329,7 @@ class BinGateMixedOp(NASModule):
             sample_ops = self.get_state('s_op')
             a_grad = torch.zeros(self.params_shape)
             m_out = self.get_state('m_out'+dev_id)
+            m_out.detach_()
             # y_grad = (torch.autograd.grad(loss, m_out, retain_graph=False,only_inputs=False)[0]).detach()
             x_f = self.get_state('x_f'+dev_id)
             w_path_f = self.get_state('w_path_f')
@@ -325,7 +341,7 @@ class BinGateMixedOp(NASModule):
                     op = self._ops[oj].to(device=x_f.device)
                     op_out = op(x_f)
                     op_out.detach_()
-                    op.to(device='cpu')
+                    # op.to(device='cpu')
                 g_grad = torch.sum(torch.mul(m_grad, op_out))
                 g_grad.detach_()
                 mid = str(self.id) + '_' + str(int(j))
@@ -382,6 +398,7 @@ class NASController(nn.Module):
         xs = nn.parallel.scatter(x, self.device_ids)
 
         # replicate modules
+        # self.net.to(device=self.device_ids[0])
         replicas = nn.parallel.replicate(self.net, self.device_ids)
         outputs = nn.parallel.parallel_apply(replicas,
                                              list(xs),

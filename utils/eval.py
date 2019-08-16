@@ -101,7 +101,9 @@ def train(train_loader, model, writer, logger, optim, epoch, lr, device, config)
         N = X.size(0)
 
         optim.zero_grad()
+        tprof.timer_start('augment-train')
         logits = model(X)
+        tprof.timer_stop('augment-train')
         loss = model.criterion(logits, y)
         # logits, aux_logits = model(X)
         # if config.aux_weight > 0.:
@@ -129,7 +131,7 @@ def train(train_loader, model, writer, logger, optim, epoch, lr, device, config)
         cur_step += 1
 
     logger.info("Train: [{:3d}/{}] Final Prec@1 {:.4%}".format(epoch+1, config.epochs, top1.avg))
-    tprof.stat_acc('model')
+    tprof.print_stat('augment-train')
 
 def validate(valid_loader, model, writer, logger, epoch, tot_epochs, device, cur_step, config):
     top1 = utils.AverageMeter()
@@ -143,7 +145,9 @@ def validate(valid_loader, model, writer, logger, epoch, tot_epochs, device, cur
             X, y = X.to(device, non_blocking=True), y.to(device, non_blocking=True)
             N = X.size(0)
 
+            tprof.timer_start('validate')
             logits = model(X)
+            tprof.timer_stop('validate')
             loss = model.criterion(logits, y)
 
             prec1, prec5 = utils.accuracy(logits, y, topk=(1, 5))
@@ -163,5 +167,6 @@ def validate(valid_loader, model, writer, logger, epoch, tot_epochs, device, cur
     writer.add_scalar('val/top5', top5.avg, cur_step)
 
     logger.info("Valid: [{:2d}/{}] Final Prec@1 {:.4%}".format(epoch+1, tot_epochs, top1.avg))
+    tprof.print_stat('validate')
 
     return top1.avg

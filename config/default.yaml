@@ -45,6 +45,10 @@ train:
   save_freq: 5
   plot_path: './searchs'
   gt_file: './searchs'
+  architect:
+    n_samples: 2
+    unrolled: False
+    renorm: True
 ---
 valid:
   trn_batch_size: 64
@@ -64,10 +68,6 @@ valid:
   drop_path_prob: 0.2
   grad_clip: 5.
   print_freq: 50
-  architect:
-    n_samples: 2
-    unrolled: False
-    renorm: True
 ---
 model:
   type: 'proxyless-nas'
