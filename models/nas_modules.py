@@ -39,11 +39,16 @@ class NASModule(nn.Module):
     
     @staticmethod
     def set_device(dev_list):
-        NASModule._dev_list = dev_list if len(dev_list)>0 else [None]
+        dev_list = dev_list if len(dev_list)>0 else [None]
+        NASModule._dev_list = [NASModule.get_dev_id(d) for d in dev_list]
     
     @staticmethod
     def get_device():
         return NASModule._dev_list
+    
+    @staticmethod
+    def get_dev_id(index):
+        return '_' if index is None else str(index)
 
     @staticmethod
     def get_new_id():
@@ -115,6 +120,20 @@ class NASModule(nn.Module):
             for i in range(1,len(mlist)):
                 p_grad += mmap[mlist[i]].param_grad(loss)
             NASModule._params[pid].grad = p_grad
+
+    @staticmethod
+    def param_backward_from_grad(m_grad, dev_id):
+        mmap = NASModule._modules
+        pmap = NASModule._params_map
+        for pid in pmap:
+            mlist = pmap[pid]
+            p_grad = 0
+            for i in range(0,len(mlist)):
+                p_grad = mmap[mlist[i]].param_grad_dev(m_grad[mlist[i]], dev_id) + p_grad
+            if NASModule._params[pid].grad is None:
+                NASModule._params[pid].grad = p_grad
+            else:
+                NASModule._params[pid].grad += p_grad
     
     @staticmethod
     def params():
@@ -146,7 +165,9 @@ class NASModule(nn.Module):
         return NASModule._module_state_dict[self.id]
     
     def get_state(self, name):
-        return self.state_dict()[name]
+        sd = self.state_dict()
+        if not name in sd: return
+        return sd[name]
     
     def set_state(self, name, val):
         self.state_dict()[name] = val
@@ -156,6 +177,7 @@ class NASModule(nn.Module):
     
     @staticmethod
     def build_from_genotype(gene, kwargs={}):
+        if gene.ops is None: return
         for m, g in zip(NASModule._modules, gene.ops):
             m.build_from_genotype(g, **kwargs)
     
@@ -250,8 +272,7 @@ class BinGateMixedOp(NASModule):
                 x = x[0]
         if self.fixed:
             return self.op(x)
-        dev_id = x.device.index
-        dev_id = '_' if dev_id is None else str(dev_id)
+        dev_id = NASModule.get_dev_id(x.device.index)
         self.set_state('x_f'+dev_id, x.detach())
         smp = self.get_state('s_path_f')
         self.swap_ops(smp, x.device)
@@ -278,20 +299,22 @@ class BinGateMixedOp(NASModule):
                     p.requires_grad = False
                     p.grad = None
 
-    def param_grad(self, loss):
+    def param_grad(self, m_grad):
         a_grad = 0
         for dev in NASModule.get_device():
-            a_grad = self.param_grad_dev(loss, dev) + a_grad
+            tid = str(self.id)
+            tprof.timer_start(tid)
+            a_grad = self.param_grad_dev(m_grad, dev) + a_grad
+            tprof.timer_stop(tid)
+            tprof.print_stat(tid)
         return a_grad
     
-    def param_grad_dev(self, loss, dev_id):
-        dev_id = '_' if dev_id is None else str(dev_id)
+    def param_grad_dev(self, m_grad, dev_id):
         with torch.no_grad():
             sample_ops = self.get_state('s_op')
             a_grad = torch.zeros(self.params_shape)
             m_out = self.get_state('m_out'+dev_id)
-            y_grad = (torch.autograd.grad(loss, m_out, retain_graph=True)[0]).detach()
-            m_out.detach_()
+            # y_grad = (torch.autograd.grad(loss, m_out, retain_graph=False,only_inputs=False)[0]).detach()
             x_f = self.get_state('x_f'+dev_id)
             w_path_f = self.get_state('w_path_f')
             s_path_f = self.get_state('s_path_f')
@@ -303,7 +326,7 @@ class BinGateMixedOp(NASModule):
                     op_out = op(x_f)
                     op_out.detach_()
                     op.to(device='cpu')
-                g_grad = torch.sum(torch.mul(y_grad, op_out))
+                g_grad = torch.sum(torch.mul(m_grad, op_out))
                 g_grad.detach_()
                 mid = str(self.id) + '_' + str(int(j))
                 lat_term = 0 if self.w_lat == 0 else tprof.avg(mid) * self.w_lat
@@ -384,6 +407,7 @@ class NASController(nn.Module):
             handler.setFormatter(formatter)
 
     def dags(self):
+        if not hasattr(self.net,'dags'): return []
         return self.net.dags()
 
     def genotype(self,k=2):

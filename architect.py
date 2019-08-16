@@ -113,19 +113,20 @@ class DARTSArchitect():
 
 class BinaryGateArchitect():
     """ Compute gradients of alphas """
-    def __init__(self, net, w_momentum, w_weight_decay, n_samples=2, unrolled=False, renorm=True):
+    def __init__(self, config, net):
         """
         Args:
             net
             w_momentum: weights momentum
         """
         self.net = net
-        self.w_momentum = w_momentum
-        self.w_weight_decay = w_weight_decay
-        self.n_samples = n_samples
-        self.unrolled = unrolled
-        self.renorm = renorm
-        if unrolled:
+        self.w_momentum = config.w_optim.momentum
+        self.w_weight_decay = config.w_optim.weight_decay
+        self.n_samples = config.architect.n_samples
+        self.unrolled = config.architect.unrolled
+        self.sample = False if self.n_samples==0 else True
+        self.renorm = config.architect.renorm and self.sample
+        if self.unrolled:
             self.v_net = copy.deepcopy(net)
     
     def virtual_step(self, trn_X, trn_y, xi, w_optim):
@@ -167,12 +168,18 @@ class BinaryGateArchitect():
         a_optim.zero_grad()
         
         # sample k
-        NASModule.param_module_call('sample_ops', n_samples=self.n_samples)
+        if self.sample:
+            NASModule.param_module_call('sample_ops', n_samples=self.n_samples)
         
         if not self.unrolled:
             loss = self.net.loss(val_X, val_y)
-            self.net.alpha_backward(loss)
-        else:        
+            # loss.backward()
+            # self.net.alpha_backward(loss)
+            for dev_id in NASModule.get_device():
+                m_out = [m.get_state('m_out'+dev_id) for m in NASModule.modules()]
+                m_grad = torch.autograd.grad(loss, m_out)
+                NASModule.param_backward_from_grad(m_grad, dev_id)
+        else:
             # do virtual step (calc w`)
             self.virtual_step(trn_X, trn_y, xi, w_optim)
 
@@ -198,6 +205,7 @@ class BinaryGateArchitect():
                 s_op = m.get_state('s_op')
                 pdt = p.detach()
                 pp = pdt.index_select(-1,s_op)
+                if pp.size() == pdt.size(): continue
                 k = torch.sum(torch.exp(pdt)) / torch.sum(torch.exp(pp)) - 1
                 # print(k)
                 prev_pw.append(k)

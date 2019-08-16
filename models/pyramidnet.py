@@ -76,7 +76,6 @@ class PyramidNet(nn.Module):
         self.conv_groups = config.conv_groups
         self.bneck_ratio = config.bottleneck_ratio
         self.addrate = config.alpha / (self.n_groups*self.n_blocks*1.0)
-        print(self.addrate)
         
         block = BottleneckBlock
         self.chn_cur = self.chn

@@ -129,6 +129,7 @@ def train(train_loader, model, writer, logger, optim, epoch, lr, device, config)
         cur_step += 1
 
     logger.info("Train: [{:3d}/{}] Final Prec@1 {:.4%}".format(epoch+1, config.epochs, top1.avg))
+    tprof.stat_acc('model')
 
 def validate(valid_loader, model, writer, logger, epoch, tot_epochs, device, cur_step, config):
     top1 = utils.AverageMeter()

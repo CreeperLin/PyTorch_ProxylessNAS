@@ -78,7 +78,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
     else:
         logger.info("Starting new training run")
     
-    architect = arch(model, config.w_optim.momentum, config.w_optim.weight_decay)
+    architect = arch(config, model)
 
     # warmup training loop
     logger.info('warmup training begin')
@@ -199,7 +199,9 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
                 val_iter = iter(valid_loader)
                 val_X, val_y = next(val_iter)
             val_X, val_y = val_X.to(device, non_blocking=True), val_y.to(device, non_blocking=True)
+            tprof.timer_start('arch')
             architect.step(trn_X, trn_y, val_X, val_y, lr, w_optim, a_optim)
+            tprof.timer_stop('arch')
 
         prec1, prec5 = utils.accuracy(logits, trn_y, topk=(1, 5))
         losses.update(loss.item(), N)
@@ -220,3 +222,4 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
 
     logger.info("Train: [{:2d}/{}] Final Prec@1 {:.4%}".format(epoch+1, tot_epochs, top1.avg))
     tprof.stat_acc('model')
+    tprof.print_stat('arch')

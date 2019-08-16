@@ -64,6 +64,10 @@ valid:
   drop_path_prob: 0.2
   grad_clip: 5.
   print_freq: 50
+  architect:
+    n_samples: 2
+    unrolled: False
+    renorm: True
 ---
 model:
   type: 'proxyless-nas'
