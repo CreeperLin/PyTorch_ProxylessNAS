@@ -3,19 +3,6 @@ import sys
 from graphviz import Digraph
 import genotypes as gt
 
-acronym = {
-    'none': 'nil',
-    'avg_pool_3x3': 'AVG',
-    'max_pool_3x3': 'MAX',
-    'skip_connect': 'SKIP',
-    'sep_conv_3x3': 'SC3',
-    'sep_conv_5x5': 'SC5',
-    'sep_conv_7x7': 'SC7',
-    'dil_conv_3x3': 'DC3',
-    'dil_conv_5x5': 'DC5',
-    'conv_7x1_1x7': 'FC7',
-}
-
 def subplot(genotype, prefix, dag_layers):
     edge_attr = {
         'fontsize': '15',
@@ -71,9 +58,9 @@ def subplot(genotype, prefix, dag_layers):
                 else:
                     u = g_nodes[si-n_input]
                 if isinstance(g_child[0], str):
-                    g.edge(u, v, label=acronym[op], fillcolor="gray")
+                    g.edge(u, v, label=gt.abbr[op], fillcolor="gray")
                 else:
-                    g.edge(u, n_in[i], label='', fillcolor="gray")          
+                    g.edge(u, n_in[i], label='', fillcolor="gray")
             
     # output node
     g_out = str(prefix)+'out'

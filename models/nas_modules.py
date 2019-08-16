@@ -35,10 +35,10 @@ class NASModule(nn.Module):
             self.pid = NASModule.add_param(params_shape)
             NASModule.new_shared_p = False
         NASModule.add_module(self, self.id, self.pid)
-        print('reg NAS module: {} {}'.format(self.id, self.pid))
+        # print('reg NAS module: {} {}'.format(self.id, self.pid))
     
     @staticmethod
-    def state_dict():
+    def nasmod_state_dict():
         return {
             '_modules': NASModule._modules,
             '_params': NASModule._params,
@@ -49,7 +49,7 @@ class NASModule(nn.Module):
         }
     
     @staticmethod
-    def load_state_dict(dict):
+    def nasmod_load_state_dict(dict):
         pass
 
     @staticmethod
@@ -174,21 +174,21 @@ class NASModule(nn.Module):
     def get_param(self):
         return NASModule._params[self.pid]
     
-    def state_dict(self):
+    def nas_state_dict(self):
         if not self.id in NASModule._module_state_dict:
             NASModule._module_state_dict[self.id] = {}
         return NASModule._module_state_dict[self.id]
     
     def get_state(self, name):
-        sd = self.state_dict()
+        sd = self.nas_state_dict()
         if not name in sd: return
         return sd[name]
     
     def set_state(self, name, val):
-        self.state_dict()[name] = val
+        self.nas_state_dict()[name] = val
     
     def del_state(self, name):
-        del self.state_dict()[name]
+        del self.nas_state_dict()[name]
     
     @staticmethod
     def build_from_genotype(gene, kwargs={}):
@@ -258,7 +258,7 @@ class BinGateMixedOp(NASModule):
             for primitive in ops:
                 op = OPS[primitive](self.chn_in, stride, affine=False)
                 self._ops.append(op)
-            print("BinGateMixedOp: chn_in:{} stride:{} #p:{:.6f}".format(self.chn_in, stride, param_count(self)))
+            # print("BinGateMixedOp: chn_in:{} stride:{} #p:{:.6f}".format(self.chn_in, stride, param_count(self)))
         else:
             self.fixed = True
         self.params_shape = params_shape
@@ -294,9 +294,9 @@ class BinGateMixedOp(NASModule):
         mid = str(self.id) + '_' + str(int(smp[0]))
         tprof.timer_start(mid)
         m_out = sum(self._ops[i](x) for i in smp)
-        self.set_state('m_out'+dev_id, m_out)
         tprof.timer_stop(mid)
-        tprof.add_acc_item('model', mid)
+        self.set_state('m_out'+dev_id, m_out)
+        tprof.add_acc_item('model_'+dev_id, mid)
         return m_out
         # torch.cuda.empty_cache()
 
@@ -344,7 +344,7 @@ class BinGateMixedOp(NASModule):
                     # op.to(device='cpu')
                 g_grad = torch.sum(torch.mul(m_grad, op_out))
                 g_grad.detach_()
-                mid = str(self.id) + '_' + str(int(j))
+                mid = str(self.id) + '_' + str(int(oj))
                 lat_term = 0 if self.w_lat == 0 else tprof.avg(mid) * self.w_lat
                 for i, oi in enumerate(sample_ops):
                     kron = 1 if i==j else 0
@@ -357,12 +357,12 @@ class BinGateMixedOp(NASModule):
         if self.pid == -1: return -1, None
         w = F.softmax(self.get_param().detach(), dim=-1)
         w_max, prim_idx = torch.topk(w, 1)
-        gene = [ops[i] for i in prim_idx if ops[i]!='none']
+        gene = [gt.abbr[ops[i]] for i in prim_idx if ops[i]!='none']
         if gene == []: return -1, None
         return w_max, gene
     
     def build_from_genotype(self, gene, drop_path=True):
-        op_name = gene[0]
+        op_name = gt.deabbr[gene[0]]
         op = OPS[op_name](self.chn_in, stride=self.stride, affine=True)
         if drop_path and not isinstance(op, Identity): # Identity does not use drop path
             op = nn.Sequential(
@@ -389,7 +389,9 @@ class NASController(nn.Module):
     def forward(self, x):
         
         if not self.augment: NASModule.param_forward()
-        tprof.begin_acc_item('model')
+        
+        for dev_id in NASModule.get_device():
+            tprof.begin_acc_item('model_'+dev_id)
         
         if len(self.device_ids) <= 1:
             return self.net(x)

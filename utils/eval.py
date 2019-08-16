@@ -83,7 +83,7 @@ def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, 
         print("")
         
     logger.info("Final best Prec@1 = {:.4%}".format(best_top1))
-    tprof.stat_acc('model')
+    tprof.stat_acc('model_0')
 
 def train(train_loader, model, writer, logger, optim, epoch, lr, device, config):
     top1 = utils.AverageMeter()

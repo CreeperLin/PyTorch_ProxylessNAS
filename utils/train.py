@@ -162,7 +162,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         
     logger.info("Final best Prec@1 = {:.4%}".format(best_top1))
     logger.info("Best Genotype = {}".format(best_genotype))
-    tprof.stat_acc('model')
+    tprof.stat_acc('model_0')
     gt.to_file(best_genotype, os.path.join(out_dir, 'best.gt'))
 
 
@@ -228,6 +228,6 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
         cur_step += 1
 
     logger.info("Train: [{:2d}/{}] Final Prec@1 {:.4%}".format(epoch+1, tot_epochs, top1.avg))
-    tprof.stat_acc('model')
+    tprof.stat_acc('model_0')
     tprof.timer_stop('search-train')
     tprof.print_stat('arch')

@@ -1409,7 +1409,7 @@ class FixedTreeCell(nn.Module):
 		                out_channels=C_in, split_type='copy', merge_type='add',
 		                path_drop_rate=path_drop_rate, use_zero_drop=use_zero_drop,
 		                drop_only_add=drop_only_add)
-		print('FixedTreeCell: chn_in:{} #p:{:.3f}'.format(C_in, param_count(self)))
+		# print('FixedTreeCell: chn_in:{} #p:{:.3f}'.format(C_in, param_count(self)))
 	
 	def forward(self, x):
 		return self.root(x)

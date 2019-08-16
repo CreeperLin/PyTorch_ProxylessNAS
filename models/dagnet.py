@@ -57,7 +57,6 @@ class BinGateNet(nn.Module):
         y = self.conv_last(y)
         y = y.view(y.size(0), -1) # flatten
         y = self.fc(y)
-        # tprof.stat_acc('model')
         return y
     
     def build_from_genotype(self, gene, drop_path=True):

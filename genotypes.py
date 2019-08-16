@@ -23,6 +23,32 @@ PRIMITIVES_DEFAULT = [
     'none'
 ]
 
+abbr = {
+    'none': 'nil',
+    'avg_pool_3x3': 'AVG',
+    'max_pool_3x3': 'MAX',
+    'skip_connect': 'ID',
+    'sep_conv_3x3': 'SC3',
+    'sep_conv_5x5': 'SC5',
+    'sep_conv_7x7': 'SC7',
+    'dil_conv_3x3': 'DC3',
+    'dil_conv_5x5': 'DC5',
+    'conv_7x1_1x7': 'FC7',
+}
+
+deabbr = {
+    'nil': 'none',
+    'AVG': 'avg_pool_3x3',
+    'MAX': 'max_pool_3x3',
+    'ID': 'skip_connect',
+    'SC3': 'sep_conv_3x3',
+    'SC5': 'sep_conv_5x5',
+    'SC7': 'sep_conv_7x7',
+    'DC3': 'dil_conv_3x3',
+    'DC5': 'dil_conv_5x5',
+    'FC7': 'conv_7x1_1x7',
+}
+
 def pretty_print(gene):
     pass
 
