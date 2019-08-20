@@ -24,10 +24,10 @@ PRIMITIVES_DEFAULT = [
 ]
 
 abbr = {
-    'none': 'nil',
+    'none': 'NIL',
     'avg_pool_3x3': 'AVG',
     'max_pool_3x3': 'MAX',
-    'skip_connect': 'ID',
+    'skip_connect': 'IDT',
     'sep_conv_3x3': 'SC3',
     'sep_conv_5x5': 'SC5',
     'sep_conv_7x7': 'SC7',
@@ -37,10 +37,10 @@ abbr = {
 }
 
 deabbr = {
-    'nil': 'none',
+    'NIL': 'none',
     'AVG': 'avg_pool_3x3',
     'MAX': 'max_pool_3x3',
-    'ID': 'skip_connect',
+    'IDT': 'skip_connect',
     'SC3': 'sep_conv_3x3',
     'SC5': 'sep_conv_5x5',
     'SC7': 'sep_conv_7x7',
@@ -59,7 +59,8 @@ def to_file(gene, path):
 
 def from_file(path):
     if not os.path.exists(path):
-        return Genotype(dag=None, ops=None)
+        raise ValueError("genotype file not found")
+        # return Genotype(dag=None, ops=None)
     with open(path, 'r') as f:
         g_str = f.read()
     return from_str(g_str)

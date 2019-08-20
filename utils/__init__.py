@@ -179,3 +179,25 @@ def accuracy(output, target, topk=(1,)):
         res.append(correct_k.mul_(1.0 / batch_size))
 
     return res
+
+def format_time(sec):
+    m, s = divmod(sec, 60)
+    h, m = divmod(m, 60)
+    return "%d h %d m %d s" % (h,m,s)
+
+class ETAMeter():
+    def __init__(self, tot_epochs, epoch, tot_step):
+        self.tot_epochs = tot_epochs
+        self.epoch = epoch
+        self.tot_step = tot_step
+    
+    def start(self):
+        self.last_step = -1
+        self.last_time = time.time()
+
+    def step(self, step):
+        elps = time.time() - self.last_time
+        eta = ((self.tot_epochs-self.epoch) * self.tot_step - step) * elps / (step-self.last_step)
+        self.last_time = time.time()
+        self.last_step = step
+        return eta

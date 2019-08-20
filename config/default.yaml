@@ -39,7 +39,7 @@ train:
   lr_schduler:
     type: 'cosine'
   w_grad_clip: 5.
-  warmup_epochs: 200
+  warmup_epochs: 50
   epochs: 200
   print_freq: 50
   save_freq: 5

@@ -40,17 +40,18 @@ class NASModule(nn.Module):
     @staticmethod
     def nasmod_state_dict():
         return {
-            '_modules': NASModule._modules,
+            # '_modules': NASModule._modules,
             '_params': NASModule._params,
-            '_module_id': NASModule._module_id,
-            '_module_state_dict': NASModule._module_state_dict,
-            '_param_id': NASModule._param_id,
-            '_params_map': NASModule._params_map
+            # '_module_id': NASModule._module_id,
+            # '_module_state_dict': NASModule._module_state_dict,
+            # '_param_id': NASModule._param_id,
+            # '_params_map': NASModule._params_map
         }
     
     @staticmethod
-    def nasmod_load_state_dict(dict):
-        pass
+    def nasmod_load_state_dict(sd):
+        assert len(sd['_params']) == _param_id - 1
+        NASModule._params = sd['_params']
 
     @staticmethod
     def set_device(dev_list):
@@ -193,6 +194,7 @@ class NASModule(nn.Module):
     @staticmethod
     def build_from_genotype(gene, kwargs={}):
         if gene.ops is None: return
+        assert len(NASModule._modules) == len(gene.ops)
         for m, g in zip(NASModule._modules, gene.ops):
             m.build_from_genotype(g, **kwargs)
     
@@ -354,11 +356,11 @@ class BinGateMixedOp(NASModule):
     
     def to_genotype(self, k, ops):
         # assert ops[-1] == 'none'
-        if self.pid == -1: return -1, None
+        if self.pid == -1: return -1, [None]
         w = F.softmax(self.get_param().detach(), dim=-1)
         w_max, prim_idx = torch.topk(w, 1)
         gene = [gt.abbr[ops[i]] for i in prim_idx if ops[i]!='none']
-        if gene == []: return -1, None
+        if gene == []: return -1, [None]
         return w_max, gene
     
     def build_from_genotype(self, gene, drop_path=True):
@@ -400,7 +402,7 @@ class NASController(nn.Module):
         xs = nn.parallel.scatter(x, self.device_ids)
 
         # replicate modules
-        # self.net.to(device=self.device_ids[0])
+        self.net.to(device=self.device_ids[0])
         replicas = nn.parallel.replicate(self.net, self.device_ids)
         outputs = nn.parallel.parallel_apply(replicas,
                                              list(xs),

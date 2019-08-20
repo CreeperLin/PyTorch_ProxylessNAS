@@ -95,7 +95,8 @@ def train(train_loader, model, writer, logger, optim, epoch, lr, device, config)
     writer.add_scalar('train/lr', lr, cur_step)
 
     model.train()
-
+    eta_m = utils.ETAMeter(tot_epochs, epoch, len(train_loader))
+    eta_m.start()
     for step, (X, y) in enumerate(train_loader):
         X, y = X.to(device, non_blocking=True), y.to(device, non_blocking=True)
         N = X.size(0)
@@ -119,11 +120,12 @@ def train(train_loader, model, writer, logger, optim, epoch, lr, device, config)
         top5.update(prec5.item(), N)
 
         if step % config.print_freq == 0 or step == len(train_loader)-1:
+            eta = eta_m.step(step)
             logger.info(
                 "Train: [{:3d}/{}] Step {:03d}/{:03d} Loss {losses.avg:.3f} "
-                "Prec@(1,5) ({top1.avg:.1%}, {top5.avg:.1%})".format(
+                "Prec@(1,5) ({top1.avg:.1%}, {top5.avg:.1%}) | ETA: {eta}".format(
                     epoch+1, config.epochs, step, len(train_loader)-1, losses=losses,
-                    top1=top1, top5=top5))
+                    top1=top1, top5=top5, eta=utils.format_time(eta)))
 
         writer.add_scalar('train/loss', loss.item(), cur_step)
         writer.add_scalar('train/top1', prec1.item(), cur_step)

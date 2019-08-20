@@ -26,8 +26,10 @@ def main():
                         help="yaml config file")
     parser.add_argument('-p', '--chkpt', type=str, default=None,
                         help="path of checkpoint pt file")
-    parser.add_argument('-g','--gpus',type=str,default="all",
-                        help="override gpu ids")
+    parser.add_argument('-d','--device',type=str,default="all",
+                        help="override device ids")
+    parser.add_argument('-g','--genotype',type=str,default=None,
+                        help="override genotype file")
     args = parser.parse_args()
 
     hp = HParam(args.config)
@@ -48,7 +50,7 @@ def main():
     writer = utils.get_writer(log_dir)
     # writer.add_text('config', hp_str, 0)
     
-    dev, dev_list = utils.init_device(hp.device, args.gpus)
+    dev, dev_list = utils.init_device(hp.device, args.device)
 
     train_data = load_data(hp.data.augment)
     val_data = load_data(hp.data.augment, True)
@@ -58,7 +60,9 @@ def main():
 
     # load genotype
     g_str = hp.valid.genotype
-    if g_str == '':
+    if not args.genotype is None:
+        genotype = gt.from_file(args.genotype)
+    elif g_str == '':
         genotype = gt.from_file(hp.valid.gt_file)
     else:
         genotype = gt.from_str(g_str)

@@ -24,8 +24,8 @@ def main():
                         help="yaml config file")
     parser.add_argument('-p', '--chkpt', type=str, default=None,
                         help="path of checkpoint pt file")
-    parser.add_argument('-g','--gpus', type=str, default=None,
-                        help="override gpu ids")
+    parser.add_argument('-d','--device',type=str,default="all",
+                        help="override device ids")
     args = parser.parse_args()
 
     hp = HParam(args.config)
@@ -46,7 +46,7 @@ def main():
     writer = utils.get_writer(log_dir)
     writer.add_text('config', hp_str, 0)
     
-    dev, dev_list = utils.init_device(hp.device, args.gpus)
+    dev, dev_list = utils.init_device(hp.device, args.device)
 
     train_data = load_data(hp.data.search)
 

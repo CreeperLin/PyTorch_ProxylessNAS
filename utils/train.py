@@ -2,6 +2,7 @@
 
 import os
 import math
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,12 +16,14 @@ from utils.eval import validate
 from visualize import plot
 from profile.profiler import tprof
 import genotypes as gt
+from models.nas_modules import NASModule
 
 def save_checkpoint(out_dir, model, w_optim, a_optim, lr_scheduler, epoch, logger):
     try:
-        save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % epoch)
+        save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % (epoch+1))
         torch.save({
             'model': model.state_dict(),
+            'arch': NASModule.nasmod_state_dict(),
             'w_optim': w_optim.state_dict(),
             'a_optim': a_optim.state_dict(),
             'lr_scheduler': lr_scheduler.state_dict(),
@@ -29,7 +32,17 @@ def save_checkpoint(out_dir, model, w_optim, a_optim, lr_scheduler, epoch, logge
         }, save_path)
         logger.info("Saved checkpoint to: %s" % save_path)
     except:
-        logger.info("Save failed")
+        logger.error("Save checkpoint failed")
+
+def save_genotype(out_dir, model, epoch, logger):
+    try:
+        genotype = model.genotype()
+        logger.info("genotype = {}".format(genotype))
+        save_path = os.path.join(out_dir, 'gene_{:03d}.gt'.format(epoch+1))
+        gt.to_file(genotype, save_path)
+        logger.info("Saved genotype to: %s" % save_path)
+    except:
+        logger.error("Save genotype failed")
 
 def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, logger, device, config):
 
@@ -81,6 +94,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         logger.info("Resuming from checkpoint: %s" % chkpt_path)
         checkpoint = torch.load(chkpt_path)
         model.load_state_dict(checkpoint['model'])
+        NASModule.nasmod_load_state_dict(checkpoint['arch'])
         w_optim.load_state_dict(checkpoint['w_optim'])
         a_optim.load_state_dict(checkpoint['a_optim'])
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
@@ -117,6 +131,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         print('skipped')
     
     save_checkpoint(out_dir, model, w_optim, a_optim, lr_scheduler, init_epoch, logger)
+    save_genotype(out_dir, model, init_epoch, logger)
 
     # training loop
     logger.info('w/a training begin')
@@ -138,9 +153,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         top1 = validate(valid_loader, model, writer, logger, epoch, tot_epochs, device, cur_step, config) 
 
         # genotype
-        genotype = model.genotype()
-        logger.info("genotype = {}".format(genotype))
-        gt.to_file(genotype, os.path.join(out_dir, 'EP{:02d}.gt'.format(epoch+1)))
+        save_genotype(out_dir, model, epoch, logger)
         
         # genotype as a image
         for i, dag in enumerate(model.dags()):
@@ -162,7 +175,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         
     logger.info("Final best Prec@1 = {:.4%}".format(best_top1))
     logger.info("Best Genotype = {}".format(best_genotype))
-    tprof.stat_acc('model_0')
+    tprof.stat_acc('model_'+NASModule.get_device()[0])
     gt.to_file(best_genotype, os.path.join(out_dir, 'best.gt'))
 
 
@@ -183,6 +196,8 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
     else:
         tot_epochs = config.warmup_epochs
     
+    eta_m = utils.ETAMeter(tot_epochs, epoch, len(train_loader))
+    eta_m.start()
     for step, (trn_X, trn_y) in enumerate(train_loader):
         trn_X, trn_y = trn_X.to(device, non_blocking=True), trn_y.to(device, non_blocking=True)
         N = trn_X.size(0)
@@ -216,11 +231,12 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
         top5.update(prec5.item(), N)
 
         if step % config.print_freq == 0 or step == len(train_loader)-1:
+            eta = eta_m.step(step)
             logger.info(
                 "Train: [{:2d}/{}] Step {:03d}/{:03d} Loss {losses.avg:.3f} "
-                "Prec@(1,5) ({top1.avg:.1%}, {top5.avg:.1%})".format(
+                "Prec@(1,5) ({top1.avg:.1%}, {top5.avg:.1%}) | ETA: {eta}".format(
                     epoch+1, tot_epochs, step, len(train_loader)-1, losses=losses,
-                    top1=top1, top5=top5))
+                    top1=top1, top5=top5, eta=utils.format_time(eta)))
 
         writer.add_scalar('train/loss', loss.item(), cur_step)
         writer.add_scalar('train/top1', prec1.item(), cur_step)
@@ -228,6 +244,6 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
         cur_step += 1
 
     logger.info("Train: [{:2d}/{}] Final Prec@1 {:.4%}".format(epoch+1, tot_epochs, top1.avg))
-    tprof.stat_acc('model_0')
-    tprof.timer_stop('search-train')
+    tprof.stat_acc('model_'+NASModule.get_device()[0])
+    tprof.print_stat('search-train')
     tprof.print_stat('arch')
