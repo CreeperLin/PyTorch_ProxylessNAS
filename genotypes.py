@@ -59,8 +59,8 @@ def to_file(gene, path):
 
 def from_file(path):
     if not os.path.exists(path):
-        raise ValueError("genotype file not found")
-        # return Genotype(dag=None, ops=None)
+        # raise ValueError("genotype file not found")
+        return Genotype(dag=None, ops=None)
     with open(path, 'r') as f:
         g_str = f.read()
     return from_str(g_str)

@@ -60,6 +60,7 @@ class BinGateNet(nn.Module):
         return y
     
     def build_from_genotype(self, gene, drop_path=True):
+        assert len(self.dag_layers) == len(gene.dag)
         for dag, g in zip(self.dag_layers, gene.dag):
             dag.build_from_genotype(g, )
     

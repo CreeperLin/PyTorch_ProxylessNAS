@@ -366,12 +366,13 @@ class BinGateMixedOp(NASModule):
     def build_from_genotype(self, gene, drop_path=True):
         op_name = gt.deabbr[gene[0]]
         op = OPS[op_name](self.chn_in, stride=self.stride, affine=True)
+        if op is None: raise ValueError("invalid op name: %s" % op_name)
         if drop_path and not isinstance(op, Identity): # Identity does not use drop path
             op = nn.Sequential(
                 op,
                 DropPath_()
             )
-        self.op = op.to(device='cuda')
+        self.op = op
         self.fixed = True
         print("BinGateMixedOp: chn_in:{} stride:{} op:{} #p:{:.6f}".format(self.chn_in, self.stride, op_name, param_count(self)))
 
@@ -442,7 +443,10 @@ class NASController(nn.Module):
     def build_from_genotype(self, gene):
         try:
             self.net.build_from_genotype(gene)
-        except:
+        except Exception as e:
+            print('failed building net from genotype')
+            import traceback
+            print(traceback.format_exc())
             NASModule.build_from_genotype(gene)
 
     def weights(self, check_grad=False):
