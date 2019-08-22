@@ -69,16 +69,23 @@ def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, 
             is_best = True
         else:
             is_best = False
-
-        save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % epoch)
-        torch.save({
-            'model': model.state_dict(),
-            'w_optim': w_optim.state_dict(),
-            'lr_scheduler': lr_scheduler.state_dict(),
-            'epoch': epoch,
-            # 'hp_str': hp_str,
-        }, save_path)
-        logger.info("Saved checkpoint to: %s" % save_path)
+        
+        if config.save_freq == 0 or epoch % config.save_freq != 0:
+            print("")
+            continue
+        
+        try:
+            save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % epoch+1)
+            torch.save({
+                'model': model.state_dict(),
+                'w_optim': w_optim.state_dict(),
+                'lr_scheduler': lr_scheduler.state_dict(),
+                'epoch': epoch,
+                # 'hp_str': hp_str,
+            }, save_path)
+            logger.info("Saved checkpoint to: %s" % save_path)
+        except:
+            logger.error("Save checkpoint failed")
 
         print("")
         

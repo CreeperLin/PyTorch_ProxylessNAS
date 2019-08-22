@@ -17,7 +17,7 @@ from architect import DARTSArchitect, BinaryGateArchitect
 import genotypes as gt
 
 from utils.profiling import profile_mem
-from utils import param_size, param_count
+from utils import param_size, param_count, warmup_device
 
 def get_proxylessnasnet(config, device, dev_list):
     chn_in = config.channel_in
@@ -30,6 +30,7 @@ def get_proxylessnasnet(config, device, dev_list):
     alpha = config.alpha
     bneck = config.bottleneck_ratio
     ops = gt.PRIMITIVES_DEFAULT
+    path_drop_rate = config.path_drop_rate if config.augment else 0
     model_config = {
 	    'start_planes': chn_cur,
 	    'alpha': alpha,
@@ -46,7 +47,7 @@ def get_proxylessnasnet(config, device, dev_list):
 	    'use_depth_sep_conv': False,
 	    'groups_3x3': conv_groups,
 	    ######################################################
-	    'path_drop_rate': 0,
+	    'path_drop_rate': path_drop_rate,
 	    'use_zero_drop': True,
         'drop_only_add': False,
         'edge_cls': BinGateMixedOp,
@@ -302,6 +303,7 @@ def get_model(config, device, dev_list, genotype=None):
         n_params = param_count(model)
         print("Model params count: {:.3f} M, size: {:.3f} MB".format(n_params, mb_params))
         NASModule.set_device(dev_list)
+        warmup_device(model, 32, device)
         return model, arch
     else:
         raise Exception("invalid model type")

@@ -8,6 +8,16 @@ import torch
 import adabound
 from tensorboardX import SummaryWriter
 
+def warmup_device(model, batch_size, device):
+    X = torch.randn(batch_size,3,32,32).to(device=device)
+    model.train(True)
+    o = model(X)
+    y = torch.rand(o.size())
+    (o-y).norm().backward()
+    model.zero_grad()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
 
 def parse_gpus(gpus):
     if gpus == 'cpu':

@@ -355,10 +355,10 @@ class BinGateMixedOp(NASModule):
         return a_grad
     
     def to_genotype(self, k, ops):
-        # assert ops[-1] == 'none'
+        assert ops[-1] == 'none'
         if self.pid == -1: return -1, [None]
         w = F.softmax(self.get_param().detach(), dim=-1)
-        w_max, prim_idx = torch.topk(w, 1)
+        w_max, prim_idx = torch.topk(w[:-1], 1)
         gene = [gt.abbr[ops[i]] for i in prim_idx if ops[i]!='none']
         if gene == []: return -1, [None]
         return w_max, gene
@@ -366,7 +366,6 @@ class BinGateMixedOp(NASModule):
     def build_from_genotype(self, gene, drop_path=True):
         op_name = gt.deabbr[gene[0]]
         op = OPS[op_name](self.chn_in, stride=self.stride, affine=True)
-        if op is None: raise ValueError("invalid op name: %s" % op_name)
         if drop_path and not isinstance(op, Identity): # Identity does not use drop path
             op = nn.Sequential(
                 op,
