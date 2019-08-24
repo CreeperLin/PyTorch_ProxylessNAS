@@ -4,9 +4,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-OPS_ORDER = ['act','weight','bn']
+OPS_ORDER = ['bn','act','weight']
 
 def set_ops_order(desc):
+    global OPS_ORDER
     OPS_ORDER = desc.split('_')
     print('ops order set to: {}'.format(OPS_ORDER))
 
@@ -137,7 +138,7 @@ class StdConv(nn.Module):
                 nets.append(nn.Conv2d(C_in, C_out, kernel_size, stride, padding, bias=False))
                 C = C_out
             elif i=='act':
-                nets.append(nn.ReLU())
+                nets.append(nn.ReLU(inplace=False if OPS_ORDER[0]=='act' else True))
         self.net = nn.Sequential(*nets)
 
     def forward(self, x):
@@ -160,7 +161,7 @@ class FacConv(nn.Module):
                 nets.append(nn.Conv2d(C_in, C_out, (1, kernel_length), stride, padding, bias=False))
                 C = C_out
             elif i=='act':
-                nets.append(nn.ReLU())
+                nets.append(nn.ReLU(inplace=False if OPS_ORDER[0]=='act' else True))
 
         self.net = nn.Sequential(*nets)
 
@@ -187,7 +188,7 @@ class DilConv(nn.Module):
                 nets.append(nn.Conv2d(C_in, C_out, 1, stride=1, padding=0, bias=False))
                 C = C_out
             elif i=='act':
-                nets.append(nn.ReLU())
+                nets.append(nn.ReLU(inplace=False if OPS_ORDER[0]=='act' else True))
         self.net = nn.Sequential(*nets)
 
     def forward(self, x):
@@ -210,7 +211,7 @@ class SepConv(nn.Module):
                 nets.append(nn.Conv2d(C_in, C_out, 1, stride=1, padding=0, bias=False))
                 C = C_out
             elif i=='act':
-                nets.append(nn.ReLU())
+                nets.append(nn.ReLU(inplace=False if OPS_ORDER[0]=='act' else True))
         self.net = nn.Sequential(*nets)
 
     def forward(self, x):

@@ -1011,7 +1011,7 @@ class TreeNode(nn.Module):
 						path_out = torch.autograd.Variable(padding)
 					else:
 						path_out = self.path_normal_forward(x, edge, child, branch_bn, use_avg=self.use_avg)
-						path_out /= (1 - self.path_drop_rate)
+						path_out = path_out / (1 - self.path_drop_rate)
 				else:
 					raise NotImplementedError
 			else:
@@ -1045,7 +1045,7 @@ class TreeNode(nn.Module):
 						self.cell_drop_rate = 0
 						output = self.forward(x, virtual, init)  # normal forward
 						self.cell_drop_rate = backup
-						output /= 1 - self.cell_drop_rate
+						output = output / (1 - self.cell_drop_rate)
 						return output
 				else:
 					raise NotImplementedError
@@ -1102,7 +1102,7 @@ class TreeNode(nn.Module):
 		elif self.merge_type == 'add':
 			output = list_sum(child_outputs)
 			if self.use_avg:
-				output /= self.child_num
+				output = output / self.child_num
 		else:
 			assert len(child_outputs) == 1
 			output = child_outputs[0]

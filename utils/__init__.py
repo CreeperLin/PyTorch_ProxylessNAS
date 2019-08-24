@@ -54,6 +54,7 @@ def check_config(hp, name):
         'data.augment.root': './data',
         'data.search.cutout': 0,
         'data.augment.cutout': 16,
+        'model.ops_order': 'act_weight_bn',
     }
 
     for i in defaults:

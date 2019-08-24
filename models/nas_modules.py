@@ -443,9 +443,7 @@ class NASController(nn.Module):
         try:
             self.net.build_from_genotype(gene)
         except Exception as e:
-            print('failed building net from genotype')
-            import traceback
-            print(traceback.format_exc())
+            print('failed building net from genotype: '+str(e))
             NASModule.build_from_genotype(gene)
 
     def weights(self, check_grad=False):

@@ -56,7 +56,6 @@ def main():
     val_data = load_data(hp.data.augment, True)
 
     gt.PRIMITIVES_DEFAULT = hp.genotypes
-    print(gt.PRIMITIVES_DEFAULT)
 
     # load genotype
     g_str = hp.valid.genotype

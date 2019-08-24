@@ -1,11 +1,9 @@
 import torch
 import torch.nn as nn
 import math
+from models.ops import OPS_ORDER
 
 class GroupConv(nn.Module):
-    """
-    BN - ReLU - Conv
-    """
     def __init__(self, chn_in, chn_out, kernel_size, stride=1, padding=0, groups=1, relu=True, affine=True):
         super().__init__()
         # print(groups)
@@ -13,16 +11,21 @@ class GroupConv(nn.Module):
         if chn_out is None:
             chn_out = chn_in
         self.chn_out = chn_out
-        self.bn = nn.BatchNorm2d(chn_in, affine=affine)
-        self.act = nn.ReLU(inplace=True) if relu else None
-        self.conv = nn.Conv2d(chn_in, chn_out, kernel_size, stride, padding, groups=groups, bias=False)
+        C = chn_in
+        nets = []
+        for i in OPS_ORDER:
+            if i=='bn':
+                nets.append(nn.BatchNorm2d(C, affine=affine))
+            elif i=='act' and relu:
+                nets.append(nn.ReLU(inplace=False if OPS_ORDER[0]=='act' else True))
+            elif i=='weight':
+                nets.append(nn.Conv2d(chn_in, chn_out, kernel_size, stride, padding, groups=groups, bias=False))
+                C = chn_out
+        self.net = nn.Sequential(*nets)
 
     def forward(self, x):
         x = x[0] if isinstance(x, list) else x
-        x = self.bn(x)
-        x = x if self.act is None else self.act(x)
-        x = self.conv(x)
-        return x
+        return self.net(x)
 
 class BottleneckBlock(nn.Module):
     def __init__(self, C_in, C, stride=1, groups=1, bneck_ratio=4,

@@ -32,7 +32,7 @@ def get_proxylessnasnet(config, device, dev_list):
     bneck = config.bottleneck_ratio
     ops = gt.PRIMITIVES_DEFAULT
     path_drop_rate = config.path_drop_rate if config.augment else 0
-    ops_order = 'bn_act_weight'
+    ops_order = config.ops_order
     model_config = {
 	    'start_planes': chn_cur,
 	    'alpha': alpha,
@@ -61,7 +61,6 @@ def get_proxylessnasnet(config, device, dev_list):
             'shared_a': False,
         }
     }
-    set_ops_order(ops_order)
     criterion = nn.CrossEntropyLoss().to(device)
     net = ProxylessNASNet.set_standard_net(data_shape=(chn_in, 32, 32), n_classes=n_classes, **model_config)
     model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
@@ -294,6 +293,7 @@ model_creator = {
 # @profile_mem
 def get_model(config, device, dev_list, genotype=None):
     mtype = config.type
+    set_ops_order(config.ops_order)
     if mtype in model_creator:
         config.augment = not genotype is None
         model, arch = model_creator[mtype](config, device, dev_list)
