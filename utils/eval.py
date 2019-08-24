@@ -50,7 +50,7 @@ def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, 
     for epoch in itertools.count(init_epoch+1):
         if epoch == tot_epochs: break
 
-        drop_prob = config.drop_path_prob * epoch / config.epochs
+        drop_prob = config.drop_path_prob * epoch / tot_epochs
         model.drop_path_prob(drop_prob)
 
         lr_scheduler.step()

@@ -4,6 +4,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+OPS_ORDER = ['act','weight','bn']
+
+def set_ops_order(desc):
+    OPS_ORDER = desc.split('_')
+    print('ops order set to: {}'.format(OPS_ORDER))
 
 OPS = {
     'none': lambda C, stride, affine: Zero(stride),
@@ -96,18 +101,25 @@ class PoolBN(nn.Module):
         """
         super().__init__()
         if pool_type.lower() == 'max':
-            self.pool = nn.MaxPool2d(kernel_size, stride, padding)
+            pool = nn.MaxPool2d(kernel_size, stride, padding)
         elif pool_type.lower() == 'avg':
-            self.pool = nn.AvgPool2d(kernel_size, stride, padding, count_include_pad=False)
+            pool = nn.AvgPool2d(kernel_size, stride, padding, count_include_pad=False)
         else:
             raise ValueError()
 
-        self.bn = nn.BatchNorm2d(C, affine=affine)
+        nets = []
+        for i in OPS_ORDER:
+            if i=='bn':
+                nets.append(nn.BatchNorm2d(C, affine=affine))
+            elif i=='weight':
+                nets.append(pool)
+            elif i=='act':
+                pass
+
+        self.net = nn.Sequential(*nets)
 
     def forward(self, x):
-        out = self.pool(x)
-        out = self.bn(out)
-        return out
+        return self.net(x)
 
 
 class StdConv(nn.Module):
@@ -116,11 +128,17 @@ class StdConv(nn.Module):
     """
     def __init__(self, C_in, C_out, kernel_size, stride, padding, affine=True):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.ReLU(),
-            nn.Conv2d(C_in, C_out, kernel_size, stride, padding, bias=False),
-            nn.BatchNorm2d(C_out, affine=affine)
-        )
+        C = C_in
+        nets = []
+        for i in OPS_ORDER:
+            if i=='bn':
+                nets.append(nn.BatchNorm2d(C, affine=affine))
+            elif i=='weight':
+                nets.append(nn.Conv2d(C_in, C_out, kernel_size, stride, padding, bias=False))
+                C = C_out
+            elif i=='act':
+                nets.append(nn.ReLU())
+        self.net = nn.Sequential(*nets)
 
     def forward(self, x):
         return self.net(x)
@@ -132,12 +150,19 @@ class FacConv(nn.Module):
     """
     def __init__(self, C_in, C_out, kernel_length, stride, padding, affine=True):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.ReLU(),
-            nn.Conv2d(C_in, C_in, (kernel_length, 1), stride, padding, bias=False),
-            nn.Conv2d(C_in, C_out, (1, kernel_length), stride, padding, bias=False),
-            nn.BatchNorm2d(C_out, affine=affine)
-        )
+        C = C_in
+        nets = []
+        for i in OPS_ORDER:
+            if i=='bn':
+                nets.append(nn.BatchNorm2d(C, affine=affine))
+            elif i=='weight':
+                nets.append(nn.Conv2d(C_in, C_in, (kernel_length, 1), stride, padding, bias=False))
+                nets.append(nn.Conv2d(C_in, C_out, (1, kernel_length), stride, padding, bias=False))
+                C = C_out
+            elif i=='act':
+                nets.append(nn.ReLU())
+
+        self.net = nn.Sequential(*nets)
 
     def forward(self, x):
         return self.net(x)
@@ -152,13 +177,18 @@ class DilConv(nn.Module):
     """
     def __init__(self, C_in, C_out, kernel_size, stride, padding, dilation, affine=True):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.ReLU(),
-            nn.Conv2d(C_in, C_in, kernel_size, stride, padding, dilation=dilation, groups=C_in,
-                      bias=False),
-            nn.Conv2d(C_in, C_out, 1, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(C_out, affine=affine)
-        )
+        C = C_in
+        nets = []
+        for i in OPS_ORDER:
+            if i=='bn':
+                nets.append(nn.BatchNorm2d(C, affine=affine))
+            elif i=='weight':
+                nets.append(nn.Conv2d(C_in, C_in, kernel_size, stride, padding, dilation=dilation, groups=C_in, bias=False))
+                nets.append(nn.Conv2d(C_in, C_out, 1, stride=1, padding=0, bias=False))
+                C = C_out
+            elif i=='act':
+                nets.append(nn.ReLU())
+        self.net = nn.Sequential(*nets)
 
     def forward(self, x):
         return self.net(x)
@@ -170,10 +200,18 @@ class SepConv(nn.Module):
     """
     def __init__(self, C_in, C_out, kernel_size, stride, padding, affine=True):
         super().__init__()
-        self.net = nn.Sequential(
-            DilConv(C_in, C_in, kernel_size, stride, padding, dilation=1, affine=affine),
-            DilConv(C_in, C_out, kernel_size, 1, padding, dilation=1, affine=affine)
-        )
+        C = C_in
+        nets = []
+        for i in OPS_ORDER:
+            if i=='bn':
+                nets.append(nn.BatchNorm2d(C, affine=affine))
+            elif i=='weight':
+                nets.append(nn.Conv2d(C_in, C_in, kernel_size, stride, padding, groups=C_in, bias=False))
+                nets.append(nn.Conv2d(C_in, C_out, 1, stride=1, padding=0, bias=False))
+                C = C_out
+            elif i=='act':
+                nets.append(nn.ReLU())
+        self.net = nn.Sequential(*nets)
 
     def forward(self, x):
         return self.net(x)

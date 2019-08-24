@@ -34,9 +34,8 @@ def save_checkpoint(out_dir, model, w_optim, a_optim, lr_scheduler, epoch, logge
     except:
         logger.error("Save checkpoint failed")
 
-def save_genotype(out_dir, model, epoch, logger):
+def save_genotype(out_dir, genotype, epoch, logger):
     try:
-        genotype = model.genotype()
         logger.info("genotype = {}".format(genotype))
         save_path = os.path.join(out_dir, 'gene_{:03d}.gt'.format(epoch+1))
         gt.to_file(genotype, save_path)
@@ -131,7 +130,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         print('skipped')
     
     save_checkpoint(out_dir, model, w_optim, a_optim, lr_scheduler, init_epoch, logger)
-    save_genotype(out_dir, model, init_epoch, logger)
+    save_genotype(out_dir, model.genotype(), init_epoch, logger)
 
     # training loop
     logger.info('w/a training begin')
@@ -153,7 +152,8 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         top1 = validate(valid_loader, model, writer, logger, epoch, tot_epochs, device, cur_step, config) 
 
         # genotype
-        save_genotype(out_dir, model, epoch, logger)
+        genotype = model.genotype()
+        save_genotype(out_dir, genotype, epoch, logger)
         
         # genotype as a image
         for i, dag in enumerate(model.dags()):
