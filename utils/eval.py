@@ -13,6 +13,7 @@ import utils
 import genotypes as gt
 from visualize import plot
 from profile.profiler import tprof
+from models.nas_modules import NASModule
 
 def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, device, config):
     
@@ -90,7 +91,7 @@ def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, 
         print("")
         
     logger.info("Final best Prec@1 = {:.4%}".format(best_top1))
-    tprof.stat_acc('model_0')
+    tprof.stat_acc('model_'+NASModule.get_device()[0])
 
 def train(train_loader, model, writer, logger, optim, epoch, tot_epochs, lr, device, config):
     top1 = utils.AverageMeter()

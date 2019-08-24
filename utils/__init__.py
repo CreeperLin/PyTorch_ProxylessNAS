@@ -12,7 +12,7 @@ def warmup_device(model, batch_size, device):
     X = torch.randn(batch_size,3,32,32).to(device=device)
     model.train(True)
     o = model(X)
-    y = torch.rand(o.size())
+    y = torch.rand(o.size()).to(device=device)
     (o-y).norm().backward()
     model.zero_grad()
     if torch.cuda.is_available():
