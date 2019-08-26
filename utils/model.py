@@ -32,7 +32,7 @@ def get_proxylessnasnet(config, device, dev_list):
     bneck = config.bottleneck_ratio
     ops = gt.PRIMITIVES_DEFAULT
     path_drop_rate = config.path_drop_rate if config.augment else 0
-    ops_order = config.ops_order
+    ops_order = config.pxl_ops_order
     model_config = {
 	    'start_planes': chn_cur,
 	    'alpha': alpha,

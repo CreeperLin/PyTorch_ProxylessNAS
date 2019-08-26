@@ -55,6 +55,7 @@ def check_config(hp, name):
         'data.search.cutout': 0,
         'data.augment.cutout': 16,
         'model.ops_order': 'act_weight_bn',
+        'model.affine': False,
         'log.writer': False,
     }
 

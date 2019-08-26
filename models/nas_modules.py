@@ -258,7 +258,7 @@ class BinGateMixedOp(NASModule):
         if not config.augment:
             self.fixed = False
             for primitive in ops:
-                op = OPS[primitive](self.chn_in, stride, affine=False)
+                op = OPS[primitive](self.chn_in, stride, affine=config.affine)
                 self._ops.append(op)
             # print("BinGateMixedOp: chn_in:{} stride:{} #p:{:.6f}".format(self.chn_in, stride, param_count(self)))
         else:

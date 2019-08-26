@@ -136,7 +136,7 @@ class StdConv(nn.Module):
             if i=='bn':
                 nets.append(nn.BatchNorm2d(C, affine=affine))
             elif i=='weight':
-                bias = False if OPS_ORDER[-1] == 'bn' and affine else True
+                bias = False if OPS_ORDER[-1] == 'bn' else True
                 nets.append(nn.Conv2d(C_in, C_out, kernel_size, stride, padding, bias=bias))
                 C = C_out
             elif i=='act':
@@ -159,7 +159,7 @@ class FacConv(nn.Module):
             if i=='bn':
                 nets.append(nn.BatchNorm2d(C, affine=affine))
             elif i=='weight':
-                bias = False if OPS_ORDER[-1] == 'bn' and affine else True
+                bias = False if OPS_ORDER[-1] == 'bn' else True
                 nets.append(nn.Conv2d(C_in, C_in, (kernel_length, 1), stride, padding, bias=bias))
                 nets.append(nn.Conv2d(C_in, C_out, (1, kernel_length), stride, padding, bias=bias))
                 C = C_out
@@ -187,7 +187,7 @@ class DilConv(nn.Module):
             if i=='bn':
                 nets.append(nn.BatchNorm2d(C, affine=affine))
             elif i=='weight':
-                bias = False if OPS_ORDER[-1] == 'bn' and affine else True
+                bias = False if OPS_ORDER[-1] == 'bn' else True
                 nets.append(nn.Conv2d(C_in, C_in, kernel_size, stride, padding, dilation=dilation, groups=C_in, bias=bias))
                 nets.append(nn.Conv2d(C_in, C_out, 1, stride=1, padding=0, bias=bias))
                 C = C_out
@@ -211,7 +211,8 @@ class SepConv(nn.Module):
             if i=='bn':
                 nets.append(nn.BatchNorm2d(C, affine=affine))
             elif i=='weight':
-                bias = False if OPS_ORDER[-1] == 'bn' and affine else True
+                bias = False if OPS_ORDER[-1] == 'bn' else True
+                print(bias)
                 nets.append(nn.Conv2d(C_in, C_in, kernel_size, stride, padding, groups=C_in, bias=bias))
                 nets.append(nn.Conv2d(C_in, C_out, 1, stride=1, padding=0, bias=bias))
                 C = C_out
