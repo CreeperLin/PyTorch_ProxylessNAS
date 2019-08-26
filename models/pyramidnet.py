@@ -19,7 +19,8 @@ class GroupConv(nn.Module):
             elif i=='act' and relu:
                 nets.append(nn.ReLU(inplace=False if OPS_ORDER[0]=='act' else True))
             elif i=='weight':
-                nets.append(nn.Conv2d(chn_in, chn_out, kernel_size, stride, padding, groups=groups, bias=False))
+                bias = False if OPS_ORDER[-1] == 'bn' and affine else True
+                nets.append(nn.Conv2d(chn_in, chn_out, kernel_size, stride, padding, groups=groups, bias=bias))
                 C = chn_out
         self.net = nn.Sequential(*nets)
 

@@ -82,7 +82,8 @@ model:
   conv_groups: 2
   bottleneck_ratio: 4
   path_drop_rate: 0.2
-  ops_order: 'bn_act_weight'
+  # ops_order: 'bn_act_weight'
+  ops_order: 'act_weight_bn'
   samples: 1
   w_latency: 0
   verbose: False
