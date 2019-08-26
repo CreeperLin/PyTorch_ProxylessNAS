@@ -76,7 +76,7 @@ def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, 
             continue
         
         try:
-            save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % epoch+1)
+            save_path = os.path.join(out_dir, 'chkpt_%03d.pt' % (epoch+1))
             torch.save({
                 'model': model.state_dict(),
                 'w_optim': w_optim.state_dict(),
@@ -85,8 +85,8 @@ def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, 
                 # 'hp_str': hp_str,
             }, save_path)
             logger.info("Saved checkpoint to: %s" % save_path)
-        except:
-            logger.error("Save checkpoint failed")
+        except Exception as e:
+            logger.error("Save checkpoint failed: "+str(e))
 
         print("")
         

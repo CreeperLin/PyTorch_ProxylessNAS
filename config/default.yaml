@@ -81,9 +81,11 @@ model:
   alpha: 84
   conv_groups: 2
   bottleneck_ratio: 4
-  path_drop_rate: 0.2
+  path_drop_rate: 0.1
+  use_avg: False
+  bn_before_add: True
   pxl_ops_order: 'bn_act_weight'
-  ops_order: 'act_weight_bn'
+  ops_order: 'bn_act_weight'
   affine: False
   samples: 1
   w_latency: 0

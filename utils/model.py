@@ -33,6 +33,8 @@ def get_proxylessnasnet(config, device, dev_list):
     ops = gt.PRIMITIVES_DEFAULT
     path_drop_rate = config.path_drop_rate if config.augment else 0
     ops_order = config.pxl_ops_order
+    use_avg = config.use_avg
+    bn_before_add = config.bn_before_add
     model_config = {
 	    'start_planes': chn_cur,
 	    'alpha': alpha,
@@ -49,9 +51,6 @@ def get_proxylessnasnet(config, device, dev_list):
 	    'use_depth_sep_conv': False,
 	    'groups_3x3': conv_groups,
 	    ######################################################
-	    'path_drop_rate': path_drop_rate,
-	    'use_zero_drop': True,
-        'drop_only_add': False,
         'edge_cls': BinGateMixedOp,
         'edge_kwargs': {
             'config': config,
@@ -59,10 +58,19 @@ def get_proxylessnasnet(config, device, dev_list):
             'stride': 1,
             'ops': ops,
             'shared_a': False,
-        }
+        },
+        'tree_node_config': {
+			'use_avg': use_avg,
+			'bn_before_add': bn_before_add,
+			'path_drop_rate': path_drop_rate,
+			'use_zero_drop': True,
+			'drop_only_add': False,
+		}
     }
     criterion = nn.CrossEntropyLoss().to(device)
     net = ProxylessNASNet.set_standard_net(data_shape=(chn_in, 32, 32), n_classes=n_classes, **model_config)
+    # net_config = net.get_config()
+    # print(net_config)
     model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
                         dev_list, net=net).to(device)
     arch = BinaryGateArchitect

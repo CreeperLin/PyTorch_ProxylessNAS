@@ -1117,7 +1117,7 @@ class TreeNode(nn.Module):
 				child_configs.append(child.get_config())
 		edge_configs = []
 		for edge in self.edges:
-			if edge is None:
+			if edge is None or not hasattr(edge,'get_config'):
 				edge_configs.append(None)
 			else:
 				edge_configs.append(edge.get_config())
@@ -1366,53 +1366,46 @@ class ResidualBlock(nn.Module):
 
 class FixedTreeCell(nn.Module):
 	def __init__(self, C_in, C_out, conv1, conv2,
-				 path_drop_rate, use_zero_drop, drop_only_add, edge_cls, edge_kwargs):
+				 edge_cls, edge_kwargs, tree_node_config):
 		super().__init__()
+		tree_bn = tree_node_config['bn_before_add']
+		tree_node_config['bn_before_add'] = False
 		subsubtree11 = TreeNode(child_nodes=[None,None],
 						edges=[edge_cls(**edge_kwargs),edge_cls(**edge_kwargs)],
 						in_channels=C_in,
-		                out_channels=C_in, split_type='copy', merge_type='add',
-		                path_drop_rate=path_drop_rate, use_zero_drop=use_zero_drop,
-		                drop_only_add=drop_only_add)
+		                out_channels=C_in, split_type='copy', merge_type='add', **tree_node_config)
 		subsubtree12 = TreeNode(child_nodes=[None,None],
 						edges=[edge_cls(**edge_kwargs),edge_cls(**edge_kwargs)],
 						in_channels=C_in,
-		                out_channels=C_in, split_type='copy', merge_type='add',
-		                path_drop_rate=path_drop_rate, use_zero_drop=use_zero_drop,
-		                drop_only_add=drop_only_add)
+		                out_channels=C_in, split_type='copy', merge_type='add', **tree_node_config)
 		subsubtree21 = TreeNode(child_nodes=[None,None], 
 						edges=[edge_cls(**edge_kwargs),edge_cls(**edge_kwargs)],
 						in_channels=C_in,
-		                out_channels=C_in, split_type='copy', merge_type='add',
-		                path_drop_rate=path_drop_rate, use_zero_drop=use_zero_drop,
-		                drop_only_add=drop_only_add)
+		                out_channels=C_in, split_type='copy', merge_type='add', **tree_node_config)
 		subsubtree22 = TreeNode(child_nodes=[None,None],
 						edges=[edge_cls(**edge_kwargs),edge_cls(**edge_kwargs)],
 						in_channels=C_in,
-		                out_channels=C_in, split_type='copy', merge_type='add',
-		                path_drop_rate=path_drop_rate, use_zero_drop=use_zero_drop,
-		                drop_only_add=drop_only_add)
+		                out_channels=C_in, split_type='copy', merge_type='add', **tree_node_config)
 		subtree1 = TreeNode(child_nodes=[subsubtree11, subsubtree12],
 						edges=[edge_cls(**edge_kwargs),edge_cls(**edge_kwargs)],
 						in_channels=C_in,
-		                out_channels=C_in, split_type='copy', merge_type='add',
-		                path_drop_rate=path_drop_rate, use_zero_drop=use_zero_drop,
-		                drop_only_add=drop_only_add)
+		                out_channels=C_in, split_type='copy', merge_type='add', **tree_node_config)
 		subtree2 = TreeNode(child_nodes=[subsubtree21, subsubtree22],
 						edges=[edge_cls(**edge_kwargs),edge_cls(**edge_kwargs)],
 						in_channels=C_in,
-		                out_channels=C_in, split_type='copy', merge_type='add',
-		                path_drop_rate=path_drop_rate, use_zero_drop=use_zero_drop,
-		                drop_only_add=drop_only_add)								
+		                out_channels=C_in, split_type='copy', merge_type='add', **tree_node_config)
+
+		tree_node_config['bn_before_add'] = True		
 		self.root = TreeNode(child_nodes=[subtree1, subtree2],
 						edges=[conv1, conv2], in_channels=C_in,
-		                out_channels=C_in, split_type='copy', merge_type='add',
-		                path_drop_rate=path_drop_rate, use_zero_drop=use_zero_drop,
-		                drop_only_add=drop_only_add)
+		                out_channels=C_in, split_type='copy', merge_type='add', **tree_node_config)
 		# print('FixedTreeCell: chn_in:{} #p:{:.3f}'.format(C_in, param_count(self)))
 	
 	def forward(self, x):
 		return self.root(x)
+
+	def get_config(self):
+		return self.root.get_config()
 
 	
 class ProxylessNASNet(BasicBlockWiseConvNet):
@@ -1475,8 +1468,7 @@ class ProxylessNASNet(BasicBlockWiseConvNet):
 	def set_standard_net(data_shape, n_classes, start_planes, alpha, block_per_group, total_groups, downsample_type,
 	                     bottleneck=4, ops_order='bn_act_weight', dropout_rate=0,
 	                     final_bn=True, no_first_relu=True, use_depth_sep_conv=False, groups_3x3=1,
-						 path_drop_rate=0, use_zero_drop=True, drop_only_add=False,
-						 edge_cls=None, edge_kwargs={}):
+						 edge_cls=None, edge_kwargs={}, tree_node_config={}):
 		image_channel, image_size = data_shape[0:2]
 		
 		addrate = alpha / (block_per_group * total_groups)  # add pyramid_net
@@ -1547,9 +1539,7 @@ class ProxylessNASNet(BasicBlockWiseConvNet):
 					                      use_bn=True, act_func='relu', dropout_rate=dropout_rate, ops_order=ops_order)
 				
 				edge_kwargs['chn_in'] = (out_plane ,)
-				cell = FixedTreeCell(out_plane, out_plane, cell_edge1, cell_edge2, 
-									path_drop_rate, use_zero_drop, drop_only_add,
-									edge_cls, edge_kwargs)
+				cell = FixedTreeCell(out_plane, out_plane, cell_edge1, cell_edge2, edge_cls, edge_kwargs, tree_node_config)
 				
 				out_bottle = ConvLayer(out_plane, out_plane * bottleneck, kernel_size=1, use_bn=True,
 				                       act_func='relu', dropout_rate=dropout_rate, ops_order=ops_order)
@@ -1571,13 +1561,6 @@ class ProxylessNASNet(BasicBlockWiseConvNet):
 		blocks.append(transition2classes)
 		
 		classifier = LinearLayer(features_dim, n_classes, bias=True)
-		tree_node_config = {
-			'use_avg': True,
-			'bn_before_add': False,
-			'path_drop_rate': path_drop_rate,
-			'use_zero_drop': use_zero_drop,
-			'drop_only_add': drop_only_add,
-		}
 		
 		return ProxylessNASNet(blocks, classifier, ops_order, tree_node_config, groups_3x3)
 
