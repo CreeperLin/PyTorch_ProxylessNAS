@@ -212,7 +212,6 @@ class SepConv(nn.Module):
                 nets.append(nn.BatchNorm2d(C, affine=affine))
             elif i=='weight':
                 bias = False if OPS_ORDER[-1] == 'bn' else True
-                print(bias)
                 nets.append(nn.Conv2d(C_in, C_in, kernel_size, stride, padding, groups=C_in, bias=bias))
                 nets.append(nn.Conv2d(C_in, C_out, 1, stride=1, padding=0, bias=bias))
                 C = C_out

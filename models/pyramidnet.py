@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import math
-from models.ops import OPS_ORDER
+# from models.ops import OPS_ORDER
 
 class GroupConv(nn.Module):
     def __init__(self, chn_in, chn_out, kernel_size, stride=1, padding=0, groups=1, relu=True, affine=True):
@@ -13,6 +13,7 @@ class GroupConv(nn.Module):
         self.chn_out = chn_out
         C = chn_in
         nets = []
+        OPS_ORDER = ['bn', 'act', 'weight']
         for i in OPS_ORDER:
             if i=='bn':
                 nets.append(nn.BatchNorm2d(C, affine=affine))
