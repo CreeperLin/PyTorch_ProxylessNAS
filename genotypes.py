@@ -34,6 +34,7 @@ abbr = {
     'dil_conv_3x3': 'DC3',
     'dil_conv_5x5': 'DC5',
     'conv_7x1_1x7': 'FC7',
+    'conv_1x1':     'C11',
 }
 
 deabbr = {
@@ -47,6 +48,7 @@ deabbr = {
     'DC3': 'dil_conv_3x3',
     'DC5': 'dil_conv_5x5',
     'FC7': 'conv_7x1_1x7',
+    'C11': 'conv_1x1',
 }
 
 def pretty_print(gene):

@@ -23,7 +23,7 @@ train:
   workers: 4
   w_optim:
     type: 'sgd'
-    lr: 0.025
+    lr: 0.035
     lr_min: 0.001
     momentum: 0.9
     nesterov: True
@@ -53,13 +53,13 @@ train:
 valid:
   trn_batch_size: 64
   val_batch_size: 64
-  workers: 0
+  workers: 4
   epochs: 600
   genotype: ''
   gt_file: ''
   w_optim:
     type: 'sgd'
-    lr: 0.025
+    lr: 0.1
     lr_min: 0.001
     momentum: 0.9
     weight_decay: 0.0003
@@ -68,6 +68,7 @@ valid:
   drop_path_prob: 0.2
   grad_clip: 5.
   print_freq: 50
+  save_freq: 5
 ---
 model:
   type: 'proxyless-nas'
