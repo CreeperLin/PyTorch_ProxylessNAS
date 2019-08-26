@@ -33,6 +33,22 @@ class ConcatMerger(MergerBase):
     def merge_range(self, num_states):
         return range(self.start, num_states)
 
+
+class AvgMerger(MergerBase):
+    def __init__(self, start=0):
+        super().__init__()
+        self.start = start
+    
+    def chn_out(self, chn_states):
+        return chn_states[-1]
+    
+    def merge(self, states):
+        return sum(states[self.start:]) / len(states)
+
+    def merge_range(self, num_states):
+        return range(self.start, num_states)
+
+
 class SumMerger(MergerBase):
     def __init__(self, start=0):
         super().__init__()

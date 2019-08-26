@@ -31,8 +31,8 @@ def save_checkpoint(out_dir, model, w_optim, a_optim, lr_scheduler, epoch, logge
             # 'hp_str': hp_str,
         }, save_path)
         logger.info("Saved checkpoint to: %s" % save_path)
-    except:
-        logger.error("Save checkpoint failed")
+    except Exception as e:
+        logger.error("Save checkpoint failed: "+str(e))
 
 def save_genotype(out_dir, genotype, epoch, logger):
     try:

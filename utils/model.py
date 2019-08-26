@@ -9,7 +9,7 @@ from models.layers import DAGLayer, TreeLayer,\
                         PreprocLayer, MergeFilterLayer
 from models.nas_modules import DARTSMixedOp, BinGateMixedOp,\
                                 NASController, NASModule
-from models.defs import ConcatMerger, SumMerger, LastMerger, SumMerger,\
+from models.defs import ConcatMerger, SumMerger, LastMerger, SumMerger, AvgMerger,\
                         CombinationEnumerator, LastNEnumerator,\
                         TreeEnumerator, FirstNEnumerator,\
                         EvenSplitAllocator, ReplicateAllocator
@@ -105,7 +105,8 @@ def get_pyramidnet(config, device, dev_list):
     n_inputs_layer = config.inputs_layer
     n_inputs_node = config.inputs_node
     ops = gt.PRIMITIVES_DEFAULT
-
+    allocator = ReplicateAllocator
+    merger = AvgMerger
     pyramidnet_kwargs = {
         'cell_cls': TreeLayer,
         'cell_kwargs': {
@@ -113,8 +114,8 @@ def get_pyramidnet(config, device, dev_list):
             'n_nodes': n_nodes,
             'chn_in': (chn_cur, ) * n_inputs_layer,
             'shared_a': False,
-            'allocator': ReplicateAllocator,
-            'merger_out': SumMerger,
+            'allocator': allocator,
+            'merger_out': merger,
             'preproc': None,
             'aggregate': None,
             'edge_cls': GroupConv,
@@ -133,8 +134,8 @@ def get_pyramidnet(config, device, dev_list):
                 'chn_in': (chn_cur, ) * n_inputs_layer,
                 'stride': 1,
                 'shared_a': False,
-                'allocator': ReplicateAllocator,
-                'merger_out': SumMerger,
+                'allocator': allocator,
+                'merger_out': merger,
                 'preproc': None,
                 'aggregate': None,
                 'edge_cls': BinGateMixedOp,
@@ -152,8 +153,8 @@ def get_pyramidnet(config, device, dev_list):
                     'chn_in': (chn_cur, ) * n_inputs_layer,
                     'stride': 1,
                     'shared_a': False,
-                    'allocator': ReplicateAllocator,
-                    'merger_out': SumMerger,
+                    'allocator': allocator,
+                    'merger_out': merger,
                     'preproc': None,
                     'aggregate': None,
                     'edge_cls': BinGateMixedOp,

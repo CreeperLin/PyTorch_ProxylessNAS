@@ -26,6 +26,8 @@ def main():
                         help="path of checkpoint pt file")
     parser.add_argument('-d','--device',type=str,default="all",
                         help="override device ids")
+    parser.add_argument('-g','--genotype',type=str,default=None,
+                        help="override genotype file")
     args = parser.parse_args()
 
     hp = HParam(args.config)
@@ -43,7 +45,7 @@ def main():
 
     logger = utils.get_logger(log_dir, args.name)
 
-    writer = utils.get_writer(log_dir)
+    writer = utils.get_writer(log_dir, hp.log.writer)
     writer.add_text('config', hp_str, 0)
     
     dev, dev_list = utils.init_device(hp.device, args.device)

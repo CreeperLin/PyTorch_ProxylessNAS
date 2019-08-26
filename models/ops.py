@@ -214,6 +214,10 @@ class SepConv(nn.Module):
             elif i=='act':
                 nets.append(nn.ReLU(inplace=False if OPS_ORDER[0]=='act' else True))
         self.net = nn.Sequential(*nets)
+        # self.net = nn.Sequential(
+        #     DilConv(C_in, C_in, kernel_size, stride, padding, dilation=1, affine=affine),
+        #     DilConv(C_in, C_out, kernel_size, 1, padding, dilation=1, affine=affine)
+        # )
 
     def forward(self, x):
         return self.net(x)

@@ -5,8 +5,8 @@ import time
 import logging
 import numpy as np
 import torch
-import adabound
 from tensorboardX import SummaryWriter
+import genotypes as gt
 
 def warmup_device(model, batch_size, device):
     X = torch.randn(batch_size,3,32,32).to(device=device)
@@ -55,6 +55,7 @@ def check_config(hp, name):
         'data.search.cutout': 0,
         'data.augment.cutout': 16,
         'model.ops_order': 'act_weight_bn',
+        'log.writer': False,
     }
 
     for i in defaults:
@@ -100,18 +101,29 @@ def init_device(config, ovr_gpus):
 def get_logger(log_dir, name):
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
+        format='%(asctime)s - %(name)s - %(message)s',
         handlers=[
             logging.FileHandler(os.path.join(log_dir,
                 '%s-%d.log' % (name, time.time()))),
             logging.StreamHandler()
         ]
     )
-    return logging.getLogger()
+    return logging.getLogger(name)
 
 
-def get_writer(log_dir):
-    writer = SummaryWriter(log_dir)
+class DummyWriter():
+    def __init__(self):
+        pass
+
+    def add_scalar(*args, **kwargs):
+        pass
+    
+    def add_text(*args, **kwargs):
+        pass
+
+
+def get_writer(log_dir, enabled):
+    writer = SummaryWriter(log_dir) if enabled else DummyWriter()
     return writer
 
 
@@ -120,6 +132,7 @@ def get_optim(params, config):
         optimizer = torch.optim.Adam(params,
                             lr=config.lr)
     elif config.type == 'adabound':
+        import adabound
         optimizer = adabound.AdaBound(params,
                             lr=config.lr,
                             final_lr=config.final_lr)
@@ -139,6 +152,16 @@ def get_lr_scheduler(config):
     else:
         raise NotImplementedError
     return lr_scheduler
+
+def get_genotype(config, ovr_genotype):
+    g_str = config.valid.genotype
+    if not ovr_genotype is None:
+        genotype = gt.from_file(ovr_genotype)
+    elif g_str == '':
+        genotype = gt.from_file(config.valid.gt_file)
+    else:
+        genotype = gt.from_str(g_str)
+    return genotype
 
 def param_size(model):
     """ Compute parameter size in MB """

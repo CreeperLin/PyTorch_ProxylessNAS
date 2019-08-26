@@ -10,8 +10,6 @@ import argparse
 
 from utils.eval import augment
 from utils.hparam import HParam
-from utils import check_config
-from utils import get_logger
 from utils.model import get_model
 import utils
 import genotypes as gt
@@ -42,12 +40,12 @@ def main():
     log_dir = os.path.join(log_dir, args.name)
     os.makedirs(log_dir, exist_ok=True)
 
-    logger = get_logger(log_dir, args.name)
+    logger = utils.get_logger(log_dir, args.name)
 
-    if check_config(hp, args.name):
+    if utils.check_config(hp, args.name):
         raise Exception("Config error.")
 
-    writer = utils.get_writer(log_dir)
+    writer = utils.get_writer(log_dir, hp.log.writer)
     # writer.add_text('config', hp_str, 0)
     
     dev, dev_list = utils.init_device(hp.device, args.device)
@@ -58,13 +56,7 @@ def main():
     gt.PRIMITIVES_DEFAULT = hp.genotypes
 
     # load genotype
-    g_str = hp.valid.genotype
-    if not args.genotype is None:
-        genotype = gt.from_file(args.genotype)
-    elif g_str == '':
-        genotype = gt.from_file(hp.valid.gt_file)
-    else:
-        genotype = gt.from_str(g_str)
+    genotype = utils.get_genotype(hp, args.genotype)
     
     model, arch = get_model(hp.model, dev, dev_list, genotype)
 
