@@ -50,7 +50,7 @@ class NASModule(nn.Module):
     
     @staticmethod
     def nasmod_load_state_dict(sd):
-        assert len(sd['_params']) == _param_id - 1
+        assert len(sd['_params']) == NASModule._param_id + 1
         NASModule._params = sd['_params']
 
     @staticmethod

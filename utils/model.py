@@ -44,7 +44,7 @@ def get_proxylessnasnet(config, device, dev_list):
 	    ######################################################
 	    'bottleneck': bneck,
 	    'ops_order': ops_order,
-	    'dropout_rate': 0,
+	    'dropout_rate': config.dropout_rate,
 	    ######################################################
 	    'final_bn': True,
 	    'no_first_relu': True,

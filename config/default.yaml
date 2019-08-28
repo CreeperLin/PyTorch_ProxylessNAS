@@ -39,7 +39,8 @@ train:
   lr_schduler:
     type: 'cosine'
   w_grad_clip: 5.
-  warmup_epochs: 50
+  drop_path_prob: 0.0
+  warmup_epochs: 25
   epochs: 200
   print_freq: 50
   save_freq: 5
@@ -65,7 +66,7 @@ valid:
     weight_decay: 0.0003
     nesterov: True
   aux_weight: 0.0
-  drop_path_prob: 0.2
+  drop_path_prob: 0.0
   grad_clip: 5.
   print_freq: 50
   save_freq: 5
@@ -82,6 +83,7 @@ model:
   conv_groups: 2
   bottleneck_ratio: 4
   path_drop_rate: 0.1
+  dropout_rate: 0.0
   use_avg: False
   bn_before_add: True
   pxl_ops_order: 'bn_act_weight'
