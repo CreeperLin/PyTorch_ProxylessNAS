@@ -51,7 +51,8 @@ class NASModule(nn.Module):
     @staticmethod
     def nasmod_load_state_dict(sd):
         assert len(sd['_params']) == NASModule._param_id + 1
-        NASModule._params = sd['_params']
+        for p, sp in zip(NASModule._params, sd['_params']):
+            p.data.copy_(sp)
 
     @staticmethod
     def set_device(dev_list):
@@ -251,21 +252,21 @@ class BinGateMixedOp(NASModule):
         else:
             self.agg_weight = nn.Parameter(torch.zeros(self.in_deg, requires_grad=True))
             self.chn_in = chn_in[0]
-        self._ops = nn.ModuleList()
         self.n_samples = config.samples
         self.w_lat = config.w_latency
         self.stride = stride
         if not config.augment:
+            self._ops = nn.ModuleList()
             self.fixed = False
             for primitive in ops:
                 op = OPS[primitive](self.chn_in, stride, affine=config.affine)
                 self._ops.append(op)
+            self.reset_ops()
             # print("BinGateMixedOp: chn_in:{} stride:{} #p:{:.6f}".format(self.chn_in, stride, param_count(self)))
         else:
             self.fixed = True
         self.params_shape = params_shape
         self.chn_out = self.chn_in
-        self.reset_ops()
     
     def param_forward(self, p, requires_grad=False):
         s_op = self.get_state('s_op')
@@ -284,7 +285,7 @@ class BinGateMixedOp(NASModule):
         if self.in_deg != 1:
             x = torch.matmul(x, torch.sigmoid(self.agg_weight))
         else:
-            assert len(x) == 1 or x.shape[1] == self.chn_in
+            assert len(x) == 1 or x.shape[1] == self.chn_in, 'invalid x shape: {} {}'.format(self.chn_in, x.shape)
             if len(x) == 1:
                 x = x[0]
         if self.fixed:

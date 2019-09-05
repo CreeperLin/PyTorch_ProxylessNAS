@@ -210,7 +210,8 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
         loss = model.criterion(logits, trn_y)
         loss.backward()
         # gradient clipping
-        nn.utils.clip_grad_norm_(model.weights(), config.w_grad_clip)
+        if config.w_grad_clip > 0:
+            nn.utils.clip_grad_norm_(model.weights(), config.w_grad_clip)
         w_optim.step()
         
         # phase 2. architect step (alpha)

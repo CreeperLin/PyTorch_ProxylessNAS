@@ -16,7 +16,7 @@ OPS = {
     'avg_pool_3x3': lambda C, stride, affine: PoolBN('avg', C, 3, stride, 1, affine=affine),
     'max_pool_3x3': lambda C, stride, affine: PoolBN('max', C, 3, stride, 1, affine=affine),
     'skip_connect': lambda C, stride, affine: \
-        Identity() if stride == 1 else FactorizedReduce(C, C, affine=affine),
+        nn.Identity() if stride == 1 else FactorizedReduce(C, C, affine=affine),
     'sep_conv_3x3': lambda C, stride, affine: SepConv(C, C, 3, stride, 1, affine=affine),
     'sep_conv_5x5': lambda C, stride, affine: SepConv(C, C, 5, stride, 2, affine=affine),
     'sep_conv_7x7': lambda C, stride, affine: SepConv(C, C, 7, stride, 3, affine=affine),
@@ -56,40 +56,25 @@ class DropPath_(nn.Module):
 
 
 class MBConv(nn.Module):
-    def __init__(self, C_in, C_out, kernel_size, stride, padding, expansion, affine=True, residual=False):
+    def __init__(self, C_in, C_out, kernel_size, stride, padding, expansion, affine=True):
         super().__init__()
         C_t = C_in * expansion
-        self.net=self.Sequential(
-            nn.Conv2d(C_in, C_t, 1, 1, 1, bias=False),
+        nets = [] if expansion == 1 else [
+            nn.Conv2d(C_in, C_t, 1, 1, 0, bias=False),
             nn.BatchNorm2d(C_t, affine),
             nn.ReLU6(),
+        ]
+        nets.extend([
             nn.Conv2d(C_t, C_t, kernel_size, stride, padding, groups=C_t, bias=False),
             nn.BatchNorm2d(C_t, affine),
             nn.ReLU6(),
-            nn.Conv2d(C_t, C_out, 1, 1, 1, bias=False),
+            nn.Conv2d(C_t, C_out, 1, 1, 0, bias=False),
             nn.BatchNorm2d(C_out, affine)
-        )
-        # self.conv1 = nn.Conv2d(C_in, C_t, 1, 1, 1, bias=False)
-        # self.bn1 = nn.BatchNorm2d(C_t, affine)
-        # self.activ = nn.ReLU6()
-        # self.conv2 = nn.Conv2d(C_t, C_out, 1, 1, 1, bias=False)
-        # self.bn2 = nn.BatchNorm2d(C_out, affine)
-        self.shortcut = nn.Identity()
-        self.r = residual
+        ])
+        self.net=nn.Sequential(*nets)
 
     def forward(self, x):
-        # x = self.conv1(x)
-        # x = self.bn1(x)
-        # x = self.activ(x)
-        # x = self.conv2(x)
-        # x = self.bn2(x)
-        res = self.net(x)
-
-        if self.r:
-            skip_x = self.shortcut(x)
-            res = res + skip_x
-
-        return res
+        return self.net(x)
 
 
 class PoolBN(nn.Module):

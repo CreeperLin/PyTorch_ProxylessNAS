@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """ Genotypes
     - Genotype: normal/reduce gene + normal/reduce cell output connection (concat)
     - gene: discrete ops information (w/o output connection)
@@ -56,14 +57,14 @@ def pretty_print(gene):
 
 def to_file(gene, path):
     g_str = str(gene)
-    with open(path, 'w') as f:
+    with open(path, 'w', encoding='UTF-8') as f:
         f.write(g_str)
 
 def from_file(path):
     if not os.path.exists(path):
         print("genotype file not found: {}".format(path))
         return Genotype(dag=None, ops=None)
-    with open(path, 'r') as f:
+    with open(path, 'r', encoding='UTF-8') as f:
         g_str = f.read()
     return from_str(g_str)
 

@@ -38,11 +38,11 @@ train:
     weight_decay: 0.001
   lr_schduler:
     type: 'cosine'
-  w_grad_clip: 5.
+  w_grad_clip: 0.0
   drop_path_prob: 0.0
   warmup_epochs: 25
   epochs: 200
-  print_freq: 50
+  print_freq: 200
   save_freq: 5
   plot_path: './searchs'
   gt_file: './searchs'
@@ -67,8 +67,8 @@ valid:
     nesterov: True
   aux_weight: 0.0
   drop_path_prob: 0.0
-  grad_clip: 5.
-  print_freq: 50
+  w_grad_clip: 0.0
+  print_freq: 200
   save_freq: 5
 ---
 model:

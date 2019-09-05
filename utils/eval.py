@@ -119,7 +119,8 @@ def train(train_loader, model, writer, logger, optim, epoch, tot_epochs, lr, dev
             # loss += config.aux_weight * model.criterion(aux_logits, y)
         loss.backward()
         # gradient clipping
-        nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
+        if config.w_grad_clip > 0:
+            nn.utils.clip_grad_norm_(model.parameters(), config.w_grad_clip)
         optim.step()
 
         prec1, prec5 = utils.accuracy(logits, y, topk=(1, 5))
