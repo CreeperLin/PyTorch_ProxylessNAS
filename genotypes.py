@@ -12,16 +12,18 @@ from models import ops
 
 Genotype = namedtuple('Genotype', 'dag ops')
 
-PRIMITIVES_DEFAULT = [
+PRIMITIVES = [
     'max_pool_3x3',
     'avg_pool_3x3',
     'skip_connect', # identity
     'sep_conv_3x3',
     'sep_conv_5x5',
+    'sep_conv_7x7',
     'dil_conv_3x3',
     'dil_conv_5x5',
-    # 'sep_conv_7x7',
-    'none'
+    'conv_7x1_1x7',
+    'conv_1x1',
+    'none',
 ]
 
 abbr = {
@@ -51,6 +53,13 @@ deabbr = {
     'FC7': 'conv_7x1_1x7',
     'C11': 'conv_1x1',
 }
+
+def set_primitives(prim):
+    global PRIMITIVES
+    PRIMITIVES = prim
+
+def get_primitives():
+    return PRIMITIVES
 
 def pretty_print(gene):
     pass

@@ -53,7 +53,7 @@ def main():
     train_data = load_data(hp.data.augment)
     val_data = load_data(hp.data.augment, True)
 
-    gt.PRIMITIVES_DEFAULT = hp.genotypes
+    gt.set_primitives(hp.genotypes)
 
     # load genotype
     genotype = utils.get_genotype(hp, args.genotype)

@@ -52,8 +52,8 @@ def main():
 
     train_data = load_data(hp.data.search)
 
-    gt.PRIMITIVES_DEFAULT = hp.genotypes
-    print(gt.PRIMITIVES_DEFAULT)
+    gt.set_primitives(hp.genotypes)
+    print(gt.get_primitives())
 
     model, arch = get_model(hp.model, dev, dev_list)    
 

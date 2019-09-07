@@ -31,7 +31,7 @@ def get_proxylessnasnet(config):
     n_blocks = config.blocks
     alpha = config.alpha
     bneck = config.bottleneck_ratio
-    ops = gt.PRIMITIVES_DEFAULT
+    ops = gt.get_primitives()
     path_drop_rate = config.path_drop_rate if config.augment else 0
     ops_order = config.pxl_ops_order
     use_avg = config.use_avg
@@ -94,7 +94,7 @@ def get_pyramidnet_origin(config):
     conv_groups = config.conv_groups
     n_blocks = config.blocks
     alpha = config.alpha
-    ops = gt.PRIMITIVES_DEFAULT
+    ops = gt.get_primitives()
     pyramidnet_kwargs = {
         'config': config,
         'cell_cls': GroupConv,
@@ -118,7 +118,7 @@ def get_pyramidnet(config):
     conv_groups = config.conv_groups
     n_inputs_layer = config.inputs_layer
     n_inputs_node = config.inputs_node
-    ops = gt.PRIMITIVES_DEFAULT
+    ops = gt.get_primitives()
     allocator = ReplicateAllocator
     merger = AvgMerger
     pyramidnet_kwargs = {
@@ -199,7 +199,7 @@ def get_dagnet(config):
     n_inputs_model = config.inputs_model
     n_inputs_layer = config.inputs_layer
     n_inputs_node = config.inputs_node
-    ops = gt.PRIMITIVES_DEFAULT
+    ops = gt.get_primitives()
 
     dagnet_kwargs = {
         'groups': config.groups,
@@ -253,7 +253,7 @@ def get_dartslike(config):
     n_inputs_model = config.inputs_model
     n_inputs_layer = config.inputs_layer
     n_inputs_node = config.inputs_node
-    ops = gt.PRIMITIVES_DEFAULT
+    ops = gt.get_primitives()
     darts_kwargs = {
         'dag_kwargs':{
             'n_nodes': n_layers,
@@ -315,8 +315,8 @@ def get_model(config, device, dev_list, genotype=None):
         config.augment = not genotype is None
         net, arch = model_creator[mtype](config)
         crit = get_net_crit(config)().to(device)
-        model = NASController(config, net, crit,
-                 gt.PRIMITIVES_DEFAULT, dev_list).to(device)
+        prim = gt.get_primitives()
+        model = NASController(config, net, crit, prim, dev_list).to(device)
         if config.augment:
             print("genotype = {}".format(genotype))
             model.build_from_genotype(genotype)

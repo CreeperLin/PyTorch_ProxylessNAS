@@ -421,8 +421,9 @@ class NASController(nn.Module):
             org_formatters.append(handler.formatter)
             handler.setFormatter(logging.Formatter("%(message)s"))
 
-        logger.info("####### ALPHA #######")
-        logger.info(torch.stack(tuple(F.softmax(a.detach(), dim=-1) for a in self.alphas()), dim=0))
+        alphas = torch.stack(tuple(F.softmax(a.detach(), dim=-1) for a in self.alphas()), dim=0)
+        logger.info("ALPHA: {}".format(alphas.shape))
+        logger.info(alphas)
 
         # restore formats
         for handler, formatter in zip(logger.handlers, org_formatters):
