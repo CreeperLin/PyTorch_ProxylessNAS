@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import json
 import torch
 import torch.nn as nn
 from models.dagnet import BinGateNet, DARTSLikeNet
@@ -16,11 +16,12 @@ from models.defs import ConcatMerger, SumMerger, LastMerger, SumMerger, AvgMerge
 from architect import DARTSArchitect, BinaryGateArchitect
 import genotypes as gt
 from models.ops import set_ops_order
+from models.BoT import CrossEntropyLoss_LS
 
 from utils.profiling import profile_mem
 from utils import param_size, param_count, warmup_device
 
-def get_proxylessnasnet(config, device, dev_list):
+def get_proxylessnasnet(config):
     chn_in = config.channel_in
     chn = config.channel_init
     chn_cur = chn * config.channel_multiplier
@@ -67,16 +68,24 @@ def get_proxylessnasnet(config, device, dev_list):
 			'drop_only_add': False,
 		}
     }
-    criterion = nn.CrossEntropyLoss().to(device)
     net = ProxylessNASNet.set_standard_net(data_shape=(chn_in, 32, 32), n_classes=n_classes, **model_config)
-    # net_config = net.get_config()
-    # print(net_config)
-    model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
-                        dev_list, net=net).to(device)
+    net_config = net.get_config()
+    net_save_path = './net.config'
+    json.dump(net_config, open(net_save_path, 'w'), indent=4)
     arch = BinaryGateArchitect
-    return model, arch
+    return net, arch
 
-def get_pyramidnet_origin(config, device, dev_list):
+def get_eas_net(config):
+    net_config_json = json.load(open(config.net_config_path, 'r'))
+    print('Net config:')
+    for k, v in net_config_json.items():
+        if k != 'blocks':
+            print('\t%s: %s' % (k, v))
+    net = ProxylessNASNet.set_from_config(net_config_json)
+    arch = BinaryGateArchitect
+    return net, arch
+
+def get_pyramidnet_origin(config):
     chn_in = config.channel_in
     chn = config.channel_init
     chn_cur = chn * config.channel_multiplier
@@ -97,14 +106,11 @@ def get_pyramidnet_origin(config, device, dev_list):
             'padding': 1,
         }
     }
-    criterion = nn.CrossEntropyLoss().to(device)
     net = PyramidNet(**pyramidnet_kwargs)
-    model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
-                        dev_list, net=net).to(device)
     arch = BinaryGateArchitect
-    return model, arch
+    return net, arch
 
-def get_pyramidnet(config, device, dev_list):
+def get_pyramidnet(config):
     chn_in = config.channel_in
     chn = config.channel_init
     chn_cur = chn * config.channel_multiplier
@@ -179,13 +185,11 @@ def get_pyramidnet(config, device, dev_list):
             }
         }
     }
-    criterion = nn.CrossEntropyLoss().to(device)
-    model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
-                        dev_list, PyramidNet, pyramidnet_kwargs, net=None).to(device)
+    net = PyramidNet(pyramidnet_kwargs)
     arch = BinaryGateArchitect
-    return model, arch
+    return net, arch
 
-def get_dagnet(config, device, dev_list):
+def get_dagnet(config):
     chn_in = config.channel_in
     chn = config.channel_init
     chn_cur = chn * config.channel_multiplier
@@ -235,13 +239,11 @@ def get_dagnet(config, device, dev_list):
             }
         },
     }
-    criterion = nn.CrossEntropyLoss().to(device)
-    model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
-                        dev_list, BinGateNet, dagnet_kwargs).to(device)
+    net = BinGateNet(dagnet_kwargs)
     arch = BinaryGateArchitect
-    return model, arch
+    return net, arch
 
-def get_dartslike(config, device, dev_list):
+def get_dartslike(config):
     chn_in = config.channel_in
     chn = config.channel_init
     chn_cur = chn * config.channel_multiplier
@@ -285,11 +287,9 @@ def get_dartslike(config, device, dev_list):
             }
         },
     }
-    criterion = nn.CrossEntropyLoss().to(device)
-    model = NASController(config, criterion, gt.PRIMITIVES_DEFAULT,
-                        dev_list, DARTSLikeNet, darts_kwargs).to(device)
+    net = DARTSLikeNet(darts_kwargs)
     arch = DARTSArchitect
-    return model, arch
+    return net, arch
 
 model_creator = {
     'proxyless-nas': get_proxylessnasnet,
@@ -297,7 +297,15 @@ model_creator = {
     'pyramidnet-origin': get_pyramidnet_origin,
     'darts-no-reduce': get_dartslike,
     'dagnet': get_dagnet,
+    'pyramidnet-eas': get_eas_net,
 }
+
+def get_net_crit(config):
+    if config.label_smoothing:
+        crit = nn.CrossEntropyLoss_LS
+    else:
+        crit = nn.CrossEntropyLoss
+    return crit
 
 # @profile_mem
 def get_model(config, device, dev_list, genotype=None):
@@ -305,7 +313,10 @@ def get_model(config, device, dev_list, genotype=None):
     set_ops_order(config.ops_order)
     if mtype in model_creator:
         config.augment = not genotype is None
-        model, arch = model_creator[mtype](config, device, dev_list)
+        net, arch = model_creator[mtype](config)
+        crit = get_net_crit(config)().to(device)
+        model = NASController(config, net, crit,
+                 gt.PRIMITIVES_DEFAULT, dev_list).to(device)
         if config.augment:
             print("genotype = {}".format(genotype))
             model.build_from_genotype(genotype)

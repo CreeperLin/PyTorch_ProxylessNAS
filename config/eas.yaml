@@ -74,25 +74,9 @@ valid:
   save_freq: 20
 ---
 model:
-  type: 'proxyless-nas'
-  classes: 10             # use 10 for MNIST, CIFAR10
-  channel_in: 3           # 3 for ImageNet/CIFAR10, 1 for MNIST
-  channel_init: 16        # init channel
-  channel_multiplier: 1   # init channel multiplier
-  groups: 3               # num of nodes (states) per layer
-  blocks: 18              # num of DAG layers (cells) in model
-  alpha: 84
-  conv_groups: 2
-  bottleneck_ratio: 4
-  path_drop_rate: 0.1
-  dropout_rate: 0.0
-  use_avg: False
-  bn_before_add: True
-  pxl_ops_order: 'bn_act_weight'
-  ops_order: 'bn_act_weight'
-  affine: False
+  type: 'pyramidnet-eas'
+  net_config_path: './genotypes/TreeCellA_B18_A84.config'
   samples: 1
-  w_latency: 0
   label_smoothing: False
   verbose: False
 ---

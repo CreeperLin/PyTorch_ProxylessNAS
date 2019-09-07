@@ -378,7 +378,7 @@ class BinGateMixedOp(NASModule):
 
 
 class NASController(nn.Module):
-    def __init__(self, config, criterion, ops, device_ids=None, net_cls=None, net_kwargs={}, net=None):
+    def __init__(self, config, net, criterion, ops, device_ids=None):
         super().__init__()
         self.n_samples = config.samples
         self.criterion = criterion
@@ -387,7 +387,7 @@ class NASController(nn.Module):
             device_ids = list(range(torch.cuda.device_count()))
         self.device_ids = device_ids
         self.ops = ops
-        self.net = net_cls(config, **net_kwargs) if net is None else net
+        self.net = net
 
     def forward(self, x):
         

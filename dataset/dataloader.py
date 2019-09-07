@@ -105,6 +105,9 @@ def load_data(config, validation=False):
     if config.cutout > 0:
         trn_transf.append(Cutout(config.cutout))
     
+    if config.jitter:
+        trn_transf.append(transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1))
+    
     if dset == datasets.ImageFolder:
         if validation:
             data = dset(config.val, transform=transforms.Compose(trn_transf))

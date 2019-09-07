@@ -10,17 +10,6 @@ from models.nas_modules import NASModule
 
 edge_id = 0
 
-# class ProxylessNASLossLayer(nn.Module):
-#     def __init__(self, w_lat):
-#         super(ProxylessNASLossLayer, self).__init__()
-#         self.ce_loss = nn.CrossEntropyLoss()
-#         self.w_lat = w_lat
-
-#     def forward(self, c_pred, c_true, latency):
-#         ce_loss = self.ce_loss(c_pred, c_true)
-#         lat_loss = self.w_lat * latency
-#         return ce_loss + lat_loss
-
 class PreprocLayer(nn.Module):
     """ Standard conv
     ReLU - Conv - BN
