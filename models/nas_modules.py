@@ -356,11 +356,11 @@ class BinGateMixedOp(NASModule):
         return a_grad
     
     def to_genotype(self, k, ops):
-        assert ops[-1] == 'none'
+        # assert ops[-1] == 'none'
         if self.pid == -1: return -1, [None]
         w = F.softmax(self.get_param().detach(), dim=-1)
-        w_max, prim_idx = torch.topk(w[:-1], 1)
-        gene = [gt.abbr[ops[i]] for i in prim_idx if ops[i]!='none']
+        w_max, prim_idx = torch.topk(w, 1)
+        gene = [gt.abbr[ops[i]] for i in prim_idx]
         if gene == []: return -1, [None]
         return w_max, gene
     

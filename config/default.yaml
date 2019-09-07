@@ -105,7 +105,6 @@ genotypes:
   - 'avg_pool_3x3'
   - 'max_pool_3x3'
   # - 'dil_conv_5x5'
-  # - 'none'
 ---
 log:
   chkpt_dir: 'chkpt'
