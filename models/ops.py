@@ -16,7 +16,7 @@ OPS = {
     'avg_pool_3x3': lambda C, stride, affine: PoolBN('avg', C, 3, stride, 1, affine=affine),
     'max_pool_3x3': lambda C, stride, affine: PoolBN('max', C, 3, stride, 1, affine=affine),
     'skip_connect': lambda C, stride, affine: \
-        nn.Identity() if stride == 1 else FactorizedReduce(C, C, affine=affine),
+        Identity() if stride == 1 else FactorizedReduce(C, C, affine=affine),
     'sep_conv_3x3': lambda C, stride, affine: SepConv(C, C, 3, stride, 1, affine=affine),
     'sep_conv_5x5': lambda C, stride, affine: SepConv(C, C, 5, stride, 2, affine=affine),
     'sep_conv_7x7': lambda C, stride, affine: SepConv(C, C, 7, stride, 3, affine=affine),
@@ -188,8 +188,14 @@ class SepConv(nn.Module):
     """ Depthwise separable conv
     DilConv(dilation=1) * 2
     """
-    def __init__(self, C_in, C_out, kernel_size, stride, padding, affine=True):
+    def __init__(self, C_in, C_out, kernel_size, stride, padding, affine=True, stack=False):
         super().__init__()
+        if stack:
+            self.net = nn.Sequential(
+                DilConv(C_in, C_in, kernel_size, stride, padding,   dilation=1, affine=affine),
+                DilConv(C_in, C_out, kernel_size, 1, padding, dilation=1, affine=affine)
+            )
+            return
         C = C_in
         nets = []
         for i in OPS_ORDER:
@@ -203,10 +209,6 @@ class SepConv(nn.Module):
             elif i=='act':
                 nets.append(nn.ReLU(inplace=False if OPS_ORDER[0]=='act' else True))
         self.net = nn.Sequential(*nets)
-        # self.net = nn.Sequential(
-        #     DilConv(C_in, C_in, kernel_size, stride, padding, dilation=1, affine=affine),
-        #     DilConv(C_in, C_out, kernel_size, 1, padding, dilation=1, affine=affine)
-        # )
 
     def forward(self, x):
         return self.net(x)

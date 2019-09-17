@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class CrossEntropyLoss_LS(nn.Module):
     def __init__(self, eta = 0.1):
@@ -8,7 +9,7 @@ class CrossEntropyLoss_LS(nn.Module):
         self.eta = eta
 
     def forward(self, y_pred, y_true):
-        n_classes = pred.size(1)
+        n_classes = y_pred.size(1)
         # convert to one-hot
         y_true = torch.unsqueeze(y_true, 1)
         soft_y_true = torch.zeros_like(y_pred)

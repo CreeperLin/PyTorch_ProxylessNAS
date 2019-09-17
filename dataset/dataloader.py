@@ -98,15 +98,15 @@ def load_data(config, validation=False):
     else:
         raise ValueError('not expected dataset = {}'.format(dataset))
 
+    if config.jitter:
+        trn_transf.append(transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1))
+    
     normalize = [transforms.ToTensor(), transforms.Normalize(MEAN, STD)]
     trn_transf.extend(normalize)
     val_transf.extend(normalize)
 
     if config.cutout > 0:
         trn_transf.append(Cutout(config.cutout))
-    
-    if config.jitter:
-        trn_transf.append(transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1))
     
     if dset == datasets.ImageFolder:
         if validation:

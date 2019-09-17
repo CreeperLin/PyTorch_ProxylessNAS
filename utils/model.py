@@ -302,7 +302,7 @@ model_creator = {
 
 def get_net_crit(config):
     if config.label_smoothing:
-        crit = nn.CrossEntropyLoss_LS
+        crit = CrossEntropyLoss_LS
     else:
         crit = nn.CrossEntropyLoss
     return crit
