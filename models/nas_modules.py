@@ -193,14 +193,14 @@ class NASModule(nn.Module):
         del self.nas_state_dict()[name]
     
     @staticmethod
-    def build_from_genotype(gene, kwargs={}):
+    def build_from_genotype_all(gene, kwargs={}):
         if gene.ops is None: return
         assert len(NASModule._modules) == len(gene.ops)
         for m, g in zip(NASModule._modules, gene.ops):
             m.build_from_genotype(g, **kwargs)
     
     @staticmethod
-    def to_genotype(k, ops):
+    def to_genotype_all(k, ops):
         gene = []
         for m in NASModule._modules:
             w, g_module = m.to_genotype(k, ops)
@@ -214,16 +214,21 @@ class DARTSMixedOp(NASModule):
         params_shape = (len(ops), )
         super().__init__(config, params_shape, shared_a)
         self.in_deg = len(chn_in)
+        self.stride = stride
         assert self.in_deg == 1
         if self.in_deg == 1:
             self.chn_in = chn_in[0]
         else:
             self.agg_weight = nn.Parameter(torch.zeros(self.in_deg, requires_grad=True))
             self.chn_in = chn_in[0]
-        self._ops = nn.ModuleList()
-        for primitive in ops:
-            op = OPS[primitive](self.chn_in, stride, affine=False)
-            self._ops.append(op)
+        if not config.augment:
+            self._ops = nn.ModuleList()
+            for primitive in ops:
+                op = OPS[primitive](self.chn_in, stride, affine=config.affine)
+                self._ops.append(op)
+            self.fixed = False
+        else:
+            self.fixed = True
         self.params_shape = params_shape
         self.chn_out = self.chn_in
     
@@ -237,7 +242,30 @@ class DARTSMixedOp(NASModule):
             x = torch.matmul(x, torch.sigmoid(self.agg_weight))
         else:
             x = x[0]
+        if self.fixed:
+            return self.op(x)
         return sum(w * op(x) for w, op in zip(w_path_f.to(device=x.device), self._ops))
+    
+    def to_genotype(self, k, ops):
+        # assert ops[-1] == 'none'
+        if self.pid == -1: return -1, [None]
+        w = F.softmax(self.get_param().detach(), dim=-1)
+        w_max, prim_idx = torch.topk(w[:-1], 1)
+        gene = [gt.abbr[ops[i]] for i in prim_idx]
+        if gene == []: return -1, [None]
+        return w_max, gene
+    
+    def build_from_genotype(self, gene, drop_path=True):
+        op_name = gt.deabbr[gene[0]]
+        op = OPS[op_name](self.chn_in, stride=self.stride, affine=True)
+        if drop_path and not isinstance(op, Identity): # Identity does not use drop path
+            op = nn.Sequential(
+                op,
+                DropPath_()
+            )
+        self.op = op
+        self.fixed = True
+        print("DARTSMixedOp: chn_in:{} stride:{} op:{} #p:{:.6f}".format(self.chn_in, self.stride, op_name, param_count(self)))
 
 
 class BinGateMixedOp(NASModule):
@@ -380,7 +408,6 @@ class BinGateMixedOp(NASModule):
 class NASController(nn.Module):
     def __init__(self, config, net, criterion, ops, device_ids=None):
         super().__init__()
-        self.n_samples = config.samples
         self.criterion = criterion
         self.augment = config.augment
         if device_ids is None:
@@ -433,12 +460,12 @@ class NASController(nn.Module):
         if not hasattr(self.net,'dags'): return []
         return self.net.dags()
 
-    def genotype(self,k=2):
+    def genotype(self):
         try:
-            gene_dag = self.net.to_genotype(k, ops=self.ops)
+            gene_dag = self.net.to_genotype(ops=self.ops)
             return gt.Genotype(dag=gene_dag, ops=None)
         except:
-            gene_ops = NASModule.to_genotype(k=1, ops=self.ops)
+            gene_ops = NASModule.to_genotype_all(k=1, ops=self.ops)
             return gt.Genotype(ops=gene_ops, dag=None)
     
     def build_from_genotype(self, gene):
@@ -446,7 +473,7 @@ class NASController(nn.Module):
             self.net.build_from_genotype(gene)
         except Exception as e:
             print('failed building net from genotype: '+str(e))
-            NASModule.build_from_genotype(gene)
+            NASModule.build_from_genotype_all(gene)
 
     def weights(self, check_grad=False):
         for n, p in self.net.named_parameters(recurse=True):

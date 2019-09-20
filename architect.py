@@ -5,7 +5,7 @@ from models.nas_modules import NASModule
 
 class DARTSArchitect():
     """ Compute gradients of alphas """
-    def __init__(self, net, w_momentum, w_weight_decay):
+    def __init__(self, config, net):
         """
         Args:
             net
@@ -13,8 +13,8 @@ class DARTSArchitect():
         """
         self.net = net
         self.v_net = copy.deepcopy(net)
-        self.w_momentum = w_momentum
-        self.w_weight_decay = w_weight_decay
+        self.w_momentum = config.w_optim.momentum
+        self.w_weight_decay = config.w_optim.weight_decay
 
     def virtual_step(self, trn_X, trn_y, xi, w_optim):
         """
@@ -120,44 +120,9 @@ class BinaryGateArchitect():
             w_momentum: weights momentum
         """
         self.net = net
-        self.w_momentum = config.w_optim.momentum
-        self.w_weight_decay = config.w_optim.weight_decay
         self.n_samples = config.architect.n_samples
-        self.unrolled = config.architect.unrolled
-        self.sample = False if self.n_samples==0 else True
+        self.sample = (self.n_samples!=0)
         self.renorm = config.architect.renorm and self.sample
-        if self.unrolled:
-            self.v_net = copy.deepcopy(net)
-    
-    def virtual_step(self, trn_X, trn_y, xi, w_optim):
-        """
-        Compute unrolled weight w' (virtual step)
-
-        Step process:
-        1) forward
-        2) calc loss
-        3) compute gradient (by backprop)
-        4) update gradient
-
-        Args:
-            xi: learning rate for virtual gradient step (same as weights lr)
-            w_optim: weights optimizer
-        """
-        # forward & calc loss
-        loss = self.net.loss(trn_X, trn_y) # L_trn(w)
-
-        # compute gradient
-        gradients = torch.autograd.grad(loss, self.net.weights(check_grad=True))
-
-        # do virtual step (update gradient)
-        # below operations do not need gradient tracking
-        with torch.no_grad():
-            # dict key is not the value, but the pointer. So original network weight have to
-            # be iterated also.
-            for w, vw, g in zip(self.net.weights(check_grad=True), self.v_net.weights(check_grad=True), gradients):
-                m = w_optim.state[w].get('momentum_buffer', 0.) * self.w_momentum
-                vw.copy_(w - xi * (m + g + self.w_weight_decay*w))
-
 
     def step(self, trn_X, trn_y, val_X, val_y, xi, w_optim, a_optim):
         """ Compute unrolled loss and backward its gradients
@@ -171,39 +136,23 @@ class BinaryGateArchitect():
         if self.sample:
             NASModule.param_module_call('sample_ops', n_samples=self.n_samples)
         
-        if not self.unrolled:
-            loss = self.net.loss(val_X, val_y)
-            # loss.backward()
-            # self.net.alpha_backward(loss)
-            m_out_dev = []
-            for dev_id in NASModule.get_device():
-                m_out = [m.get_state('m_out'+dev_id) for m in NASModule.modules()]
-                m_len = len(m_out)
-                m_out_dev.extend(m_out)
-            m_grad = torch.autograd.grad(loss, m_out_dev)
-            for i, dev_id in enumerate(NASModule.get_device()):
-                NASModule.param_backward_from_grad(m_grad[i*m_len:(i+1)*m_len], dev_id)
-        else:
-            # do virtual step (calc w`)
-            self.virtual_step(trn_X, trn_y, xi, w_optim)
-
-            # calc unrolled loss
-            loss = self.v_net.loss(val_X, val_y) # L_val(w`)
-
-            # compute gradient
-            v_weights = tuple(self.v_net.weights())
-            dw = torch.autograd.grad(loss, v_weights)
-            dalpha = self.net.alpha_grad(loss)
-
-            hessian = self.compute_hessian(dw, trn_X, trn_y)
-
-            # update final gradient = dalpha - xi*hessian
-            with torch.no_grad():
-                for alpha, da, h in zip(self.net.alphas(), dalpha, hessian):
-                    alpha.grad = da - xi*h
+        loss = self.net.loss(val_X, val_y)
+        # loss.backward()
+        # self.net.alpha_backward(loss)
+        m_out_dev = []
+        for dev_id in NASModule.get_device():
+            m_out = [m.get_state('m_out'+dev_id) for m in NASModule.modules()]
+            m_len = len(m_out)
+            m_out_dev.extend(m_out)
+        m_grad = torch.autograd.grad(loss, m_out_dev)
+        for i, dev_id in enumerate(NASModule.get_device()):
+            NASModule.param_backward_from_grad(m_grad[i*m_len:(i+1)*m_len], dev_id)
+  
         
-        # renormalization
-        if self.renorm:
+        if not self.renorm:
+            a_optim.step()
+        else:
+            # renormalization
             prev_pw = []
             for p, m in NASModule.param_modules():
                 s_op = m.get_state('s_op')
@@ -214,10 +163,8 @@ class BinaryGateArchitect():
                 # print(k)
                 prev_pw.append(k)
 
-        a_optim.step()
+            a_optim.step()
 
-        # renormalization
-        if self.renorm:
             for kprev, (p, m) in zip(prev_pw, NASModule.param_modules()):
                 s_op = m.get_state('s_op')
                 pdt = p.detach()
@@ -228,40 +175,3 @@ class BinaryGateArchitect():
                     p[i] += (torch.log(k) - torch.log(kprev))
 
         NASModule.module_call('reset_ops')
-
-    def compute_hessian(self, dw, trn_X, trn_y):
-        """
-        dw = dw` { L_val(w`, alpha) }
-        w+ = w + eps * dw
-        w- = w - eps * dw
-        hessian = (dalpha { L_trn(w+, alpha) } - dalpha { L_trn(w-, alpha) }) / (2*eps)
-        eps = 0.01 / ||dw||
-        """
-        norm = torch.cat([w.view(-1) for w in dw if not w is None]).norm()
-        eps = 0.01 / norm
-
-        # print('weight start')
-        # w+ = w + eps*dw`
-        with torch.no_grad():
-            for p, d in zip(self.net.weights(check_grad=True), dw):
-                if not p is None and not d is None:
-                    p += eps * d.to(p.device)
-        loss = self.net.loss(trn_X, trn_y)
-        dalpha_pos = torch.autograd.grad(loss, self.net.alphas(), allow_unused=True) # dalpha { L_trn(w+) }
-
-        # w- = w - eps*dw`
-        with torch.no_grad():
-            for p, d in zip(self.net.weights(check_grad=True), dw):
-                if not p is None and not d is None:
-                    p -= 2. * eps * d.to(p.device)
-        loss = self.net.loss(trn_X, trn_y)
-        dalpha_neg = torch.autograd.grad(loss, self.net.alphas(), allow_unused=True) # dalpha { L_trn(w-) }
-
-        # recover w
-        with torch.no_grad():
-            for p, d in zip(self.net.weights(check_grad=True), dw):
-                if not p is None and not d is None:
-                    p += eps * d.to(p.device)
-
-        hessian = [((p-n) / 2.*eps if not p is None else 0) for p, n in zip(dalpha_pos, dalpha_neg)]
-        return hessian

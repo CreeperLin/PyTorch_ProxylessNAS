@@ -5,11 +5,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 OPS_ORDER = ['bn','act','weight']
+sepconv_stack = False
 
-def set_ops_order(desc):
+def configure_ops(config):
     global OPS_ORDER
-    OPS_ORDER = desc.split('_')
+    OPS_ORDER = config.ops_order.split('_')
     print('ops order set to: {}'.format(OPS_ORDER))
+    
+    global sepconv_stack
+    sepconv_stack = config.sepconv_stack
+    print('SepConv stack: {}'.format(sepconv_stack))
 
 OPS = {
     'none': lambda C, stride, affine: Zero(stride),
@@ -188,9 +193,9 @@ class SepConv(nn.Module):
     """ Depthwise separable conv
     DilConv(dilation=1) * 2
     """
-    def __init__(self, C_in, C_out, kernel_size, stride, padding, affine=True, stack=False):
+    def __init__(self, C_in, C_out, kernel_size, stride, padding, affine=True):
         super().__init__()
-        if stack:
+        if sepconv_stack:
             self.net = nn.Sequential(
                 DilConv(C_in, C_in, kernel_size, stride, padding,   dilation=1, affine=affine),
                 DilConv(C_in, C_out, kernel_size, 1, padding, dilation=1, affine=affine)

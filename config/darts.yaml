@@ -5,7 +5,6 @@ data:
     train: './data/ILSVRC2012' # path to train data (ImageNet)
     val: '' # path to validation data (ImageNet)
     type: 'CIFAR10'
-    jitter: False
     # type: 'MNIST'
     # type: 'ImageNet'
   augment:
@@ -13,7 +12,6 @@ data:
     train: ''
     val: ''
     type: 'CIFAR10'
-    jitter: False
     # type: 'MNIST'
     # type: 'ImageNet'
 ---
@@ -22,93 +20,78 @@ train:
   w_data_ratio: 0.9
   trn_batch_size: 64
   val_batch_size: 64
-  workers: 4
+  workers: 0
   w_optim:
     type: 'sgd'
-    lr: 0.035
-    lr_min: 0.0
+    lr: 0.025
+    lr_min: 0.001
     momentum: 0.9
+    weight_decay: 0.0003
     nesterov: True
-    weight_decay: 0.0001
     # type: 'adabound'
     # lr: 0.001
     # final_lr: 0.05
   a_optim:
     type: 'adam'
-    lr: 0.006
-    betas: 
-      - 0.0
-      - 0.999
+    lr: 0.0003
+    betas:
+     - 0.9
+     - 0.999
     momentum: 0.9
     weight_decay: 0.001
-  lr_schduler:
-    type: 'cosine'
-  w_grad_clip: 0.0
-  drop_path_prob: 0.0
-  warmup_epochs: 5
-  epochs: 200
+  w_grad_clip: 5.
+  warmup_epochs: 20
+  epochs: 50
   print_freq: 200
-  save_freq: 20
+  save_freq: 10
   plot_path: './searchs'
-  gt_file: './searchs'
-  architect:
-    n_samples: 2
-    unrolled: False
-    renorm: True
 ---
 valid:
-  trn_batch_size: 64
-  val_batch_size: 64
-  workers: 4
-  epochs: 600
-  genotype: ''
-  gt_file: ''
+  trn_batch_size: 96
+  val_batch_size: 96
+  workers: 0
   w_optim:
     type: 'sgd'
-    lr: 0.1
-    lr_min: 0.0
+    lr: 0.025
+    lr_min: 0.001
     momentum: 0.9
-    weight_decay: 0.0001
+    weight_decay: 0.0003
     nesterov: True
   aux_weight: 0.0
-  drop_path_prob: 0.0
-  w_grad_clip: 0.0
+  drop_path_prob: 0.2
+  w_grad_clip: 5.
+  genotype: ''
+  gt_file: ''
+  epochs: 600
   print_freq: 200
-  save_freq: 20
+  save_freq: 50
 ---
 model:
-  type: 'proxyless-nas'
+  type: 'darts'
   classes: 10             # use 10 for MNIST, CIFAR10
   channel_in: 3           # 3 for ImageNet/CIFAR10, 1 for MNIST
   channel_init: 16        # init channel
-  channel_multiplier: 1   # init channel multiplier
-  groups: 3               # num of nodes (states) per layer
-  blocks: 18              # num of DAG layers (cells) in model
-  alpha: 84
-  conv_groups: 2
-  bottleneck_ratio: 4
-  path_drop_rate: 0.1
-  dropout_rate: 0.0
-  use_avg: False
-  bn_before_add: True
-  pxl_ops_order: 'bn_act_weight'
-  ops_order: 'bn_act_weight'
-  sepconv_stack: False
-  affine: False
-  samples: 1
-  w_latency: 0
-  label_smoothing: False
+  channel_multiplier: 3   # init channel multiplier
+  nodes: 4                # num of nodes (states) per layer
+  layers: 8               # num of DAG layers (cells) in model
+  inputs_model: 1
+  inputs_layer: 2
+  inputs_node: 1
+  auxiliary: False
+  sepconv_stack: True
+  w_latency: 0.0
   verbose: False
 ---
 genotypes:
-  - 'dil_conv_3x3'
+  - 'max_pool_3x3'
+  - 'avg_pool_3x3'
   - 'skip_connect' # identity
   - 'sep_conv_3x3'
   - 'sep_conv_5x5'
-  - 'sep_conv_7x7'
-  - 'avg_pool_3x3'
-  - 'max_pool_3x3'
-  # - 'dil_conv_5x5'
+  - 'dil_conv_3x3'
+  - 'dil_conv_5x5'
+  # - 'sep_conv_7x7',
+  - 'none'
 ---
 log:
   chkpt_dir: 'chkpt'

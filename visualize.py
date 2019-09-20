@@ -6,7 +6,7 @@ import genotypes as gt
 def subplot(genotype, prefix, dag_layers):
     edge_attr = {
         'fontsize': '15',
-        'fontname': 'times'
+        'fontname': 'Sans'
     }
     node_attr = {
         'style': 'filled',
@@ -23,7 +23,7 @@ def subplot(genotype, prefix, dag_layers):
         edge_attr=edge_attr,
         node_attr=node_attr,
         engine='dot')
-    g.body.extend(['rankdir=TB'])
+    g.body.extend(['rankdir=LR'])
     # input nodes
     n_input = dag_layers.n_input
     g_in = []
@@ -58,7 +58,7 @@ def subplot(genotype, prefix, dag_layers):
                 else:
                     u = g_nodes[si-n_input]
                 if isinstance(g_child[0], str):
-                    g.edge(u, v, label=gt.abbr[op], fillcolor="gray")
+                    g.edge(u, v, label=op, fillcolor="gray")
                 else:
                     g.edge(u, n_in[i], label='', fillcolor="gray")
             
@@ -77,7 +77,7 @@ def plot(genotype, dag_layers, file_path, caption=None):
     """ make DAG plot and save to file_path as .png """
     edge_attr = {
         'fontsize': '15',
-        'fontname': 'times'
+        'fontname': 'Sans'
     }
     node_attr = {
         'style': 'filled',
@@ -103,12 +103,13 @@ def plot(genotype, dag_layers, file_path, caption=None):
 
     # add image caption
     if caption:
-        g.attr(label=caption, overlap='false', fontsize='20', fontname='times')
+        g.attr(label=caption, overlap='false', fontsize='20', fontname='Sans')
 
     try:
         g.render(file_path, view=False)
-    except:
-        print('render failed')
+        print('plot saved to: {}'.format(file_path))
+    except Exception as e:
+        print('render failed: {}'.format(str(e)))
         with open(file_path, 'w') as f:
             f.write(g.source)
 

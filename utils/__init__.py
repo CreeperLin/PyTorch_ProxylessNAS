@@ -54,7 +54,12 @@ def check_config(hp, name):
         'data.augment.root': './data',
         'data.search.cutout': 0,
         'data.augment.cutout': 16,
+        'data.search.jitter': False,
+        'data.augment.jitter': False,
+        'train.a_optim.betas': (0.9, 0.999),
         'model.ops_order': 'act_weight_bn',
+        'model.sepconv_stack': False,
+        'model.label_smoothing': False,
         'model.affine': False,
         'log.writer': False,
     }
@@ -69,7 +74,7 @@ def check_config(hp, name):
                 flag = True
                 continue
             else:
-                print('ERROR: check_config: setting field {} to default: {}'.format(i, defaults[i]))
+                print('check_config: setting field {} to default: {}'.format(i, defaults[i]))
                 setattr(ddict, a, defaults[i])
     
     if flag:
@@ -131,7 +136,8 @@ def get_writer(log_dir, enabled):
 def get_optim(params, config):
     if config.type == 'adam':
         optimizer = torch.optim.Adam(params,
-                            lr=config.lr)
+                            lr=config.lr,
+                            betas=config.betas)
     elif config.type == 'adabound':
         import adabound
         optimizer = adabound.AdaBound(params,

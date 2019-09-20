@@ -14,11 +14,11 @@ class PreprocLayer(nn.Module):
     """ Standard conv
     ReLU - Conv - BN
     """
-    def __init__(self, C_in, C_out, kernel_size, stride, padding, affine=True):
+    def __init__(self, C_in, C_out, affine=False):
         super().__init__()
         self.net = nn.Sequential(
             nn.ReLU(),
-            nn.Conv2d(C_in, C_out, kernel_size, stride, padding, bias=False),
+            nn.Conv2d(C_in, C_out, 1, 1, 0, bias=False),
             nn.BatchNorm2d(C_out, affine=affine)
         )
 
@@ -48,6 +48,7 @@ class DAGLayer(nn.Module):
         self.edge_id = edge_id
         edge_id+=1
         self.n_nodes = n_nodes
+        self.stride = stride
         self.chn_in = chn_in
         self.n_input = len(chn_in)
         self.n_states = self.n_input + self.n_nodes
@@ -69,10 +70,11 @@ class DAGLayer(nn.Module):
             chn_cur = edge_kwargs['chn_in'][0]
             self.preprocs = nn.ModuleList()
             for i in range(self.n_input):
-                self.preprocs.append(preproc(chn_in[i], chn_cur, 1, 1, 0, False))
+                self.preprocs.append(preproc[i](chn_in[i], chn_cur, False))
                 chn_states.append(chn_cur)
 
         if not config.augment:
+            self.fixed = False
             self.dag = nn.ModuleList()
             self.edges = []
             self.num_edges = 0
@@ -91,12 +93,13 @@ class DAGLayer(nn.Module):
                 self.num_edges += num_edges
                 chn_states.append(self.merger_state.chn_out([ei.chn_out for ei in self.dag[i]]))
                 self.chn_out = self.merger_out.chn_out(chn_states)
-            print('DAGLayer: etype:{} chn_in:{} #n:{} #e:{}'.format(str(edge_cls), self.chn_in, self.n_nodes, self.num_edges))
+            print('DAGLayer: etype:{} chn_in:{} chn:{} #n:{} #e:{}'.format(str(edge_cls), self.chn_in, edge_kwargs['chn_in'][0],self.n_nodes, self.num_edges))
             print('DAGLayer param count: {:.6f}'.format(param_count(self)))
         else:
             self.chn_states = chn_states
             self.edge_cls = edge_cls
             self.edge_kwargs = edge_kwargs
+            self.fixed = True
 
         if aggregate is not None:
             self.merge_filter = aggregate(n_in=self.n_input+self.n_nodes,
@@ -115,7 +118,8 @@ class DAGLayer(nn.Module):
             res = []
             eidx = 0
             n_states = self.n_input+nidx
-            for sidx in self.enumerator.enum(n_states, self.n_input_e):
+            topology = self.topology[nidx] if self.fixed else self.enumerator.enum(n_states, self.n_input_e)
+            for sidx in topology:
                 e_in = self.allocator.alloc([states[i] for i in sidx], sidx, n_states)
                 res.append(edges[eidx](e_in))
                 eidx += 1
@@ -132,7 +136,6 @@ class DAGLayer(nn.Module):
     
     def to_genotype(self, k, ops):
         gene = []
-        # assert ops[-1] == 'none' # assume last PRIMITIVE is 'none'
         n_states = self.n_input
         for edges in self.dag:
             eidx = 0
@@ -161,17 +164,22 @@ class DAGLayer(nn.Module):
         edge_cls = self.edge_cls
         edge_kwargs = self.edge_kwargs
         num_edges = 0
+        self.topology = []
         for edges in gene:
             row = nn.ModuleList()
+            topo = []
             for g_child, sidx, n_states in edges:
+                topo.append(sidx)
                 e_chn_in = self.allocator.chn_in(
                     [chn_states[s] for s in sidx], sidx, n_states)
                 edge_kwargs['chn_in'] = e_chn_in
+                edge_kwargs['stride'] = self.stride if all(s < self.n_input for s in sidx) else 1
                 e = edge_cls(**edge_kwargs)
                 e.build_from_genotype(g_child)
                 row.append(e)
                 num_edges += 1
             self.dag.append(row)
+            self.topology.append(topo)
             chn_states.append(self.merger_state.chn_out([ei.chn_out for ei in row]))
         self.num_edges = num_edges
         self.chn_states = chn_states

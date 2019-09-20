@@ -15,7 +15,7 @@ from models.defs import ConcatMerger, SumMerger, LastMerger, SumMerger, AvgMerge
                         EvenSplitAllocator, ReplicateAllocator
 from architect import DARTSArchitect, BinaryGateArchitect
 import genotypes as gt
-from models.ops import set_ops_order
+from models.ops import configure_ops
 from models.BoT import CrossEntropyLoss_LS
 
 from utils.profiling import profile_mem
@@ -185,7 +185,7 @@ def get_pyramidnet(config):
             }
         }
     }
-    net = PyramidNet(pyramidnet_kwargs)
+    net = PyramidNet(**pyramidnet_kwargs)
     arch = BinaryGateArchitect
     return net, arch
 
@@ -239,14 +239,13 @@ def get_dagnet(config):
             }
         },
     }
-    net = BinGateNet(dagnet_kwargs)
+    net = BinGateNet(**dagnet_kwargs)
     arch = BinaryGateArchitect
     return net, arch
 
 def get_dartslike(config):
     chn_in = config.channel_in
     chn = config.channel_init
-    chn_cur = chn * config.channel_multiplier
     n_classes = config.classes
     n_layers = config.layers
     n_nodes = config.nodes
@@ -255,39 +254,32 @@ def get_dartslike(config):
     n_inputs_node = config.inputs_node
     ops = gt.get_primitives()
     darts_kwargs = {
-        'dag_kwargs':{
-            'n_nodes': n_layers,
-            'chn_in': (chn_cur, ) * n_inputs_model,
-            'shared_a': True,
+        'n_layers': n_layers,
+        'shared_a': False,
+        'auxiliary': config.auxiliary,
+        'cell_cls': DAGLayer,
+        'cell_kwargs': {
+            'config': config,
+            'n_nodes': n_nodes,
+            'chn_in': None,
+            'shared_a': False,
             'allocator': ReplicateAllocator,
             'merger_state': SumMerger,
-            'merger_out': LastMerger,
-            'enumerator': LastNEnumerator,
+            'merger_out': ConcatMerger,
+            'enumerator': CombinationEnumerator,
             'preproc': None,
             'aggregate': None,
-            'edge_cls': DAGLayer,
+            'edge_cls': DARTSMixedOp,
             'edge_kwargs': {
                 'config': config,
-                'n_nodes': n_nodes,
-                'chn_in': (chn_cur, ) * n_inputs_layer,
-                'shared_a': False,
-                'allocator': ReplicateAllocator,
-                'merger_state': SumMerger,
-                'merger_out': ConcatMerger,
-                'enumerator': CombinationEnumerator,
-                'preproc': PreprocLayer,
-                'aggregate': None,
-                'edge_cls': DARTSMixedOp,
-                'edge_kwargs': {
-                    'config': config,
-                    'chn_in': (chn, ) * n_inputs_node,
-                    'stride': 1,
-                    'ops': ops,
-                },
-            }
+                'chn_in': None,
+                'shared_a': None,
+                'stride': 1,
+                'ops': ops,
+            },
         },
     }
-    net = DARTSLikeNet(darts_kwargs)
+    net = DARTSLikeNet(config, **darts_kwargs)
     arch = DARTSArchitect
     return net, arch
 
@@ -295,7 +287,7 @@ model_creator = {
     'proxyless-nas': get_proxylessnasnet,
     'pyramidnet': get_pyramidnet,
     'pyramidnet-origin': get_pyramidnet_origin,
-    'darts-no-reduce': get_dartslike,
+    'darts': get_dartslike,
     'dagnet': get_dagnet,
     'pyramidnet-eas': get_eas_net,
 }
@@ -310,7 +302,7 @@ def get_net_crit(config):
 # @profile_mem
 def get_model(config, device, dev_list, genotype=None):
     mtype = config.type
-    set_ops_order(config.ops_order)
+    configure_ops(config)
     if mtype in model_creator:
         config.augment = not genotype is None
         net, arch = model_creator[mtype](config)
