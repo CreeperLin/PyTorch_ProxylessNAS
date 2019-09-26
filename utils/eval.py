@@ -113,10 +113,13 @@ def train(train_loader, model, writer, logger, optim, epoch, tot_epochs, lr, dev
         tprof.timer_start('augment-train')
         logits = model(X)
         tprof.timer_stop('augment-train')
-        loss = model.criterion(logits, y)
-        # logits, aux_logits = model(X)
-        # if config.aux_weight > 0.:
-            # loss += config.aux_weight * model.criterion(aux_logits, y)
+        if config.aux_weight > 0.:
+            logits, aux_logits = model(X)
+            loss = config.aux_weight * model.criterion(aux_logits, y)
+        else:
+            logits = model(X)
+            loss = 0
+        loss = model.criterion(logits, y) + loss
         loss.backward()
         # gradient clipping
         if config.w_grad_clip > 0:

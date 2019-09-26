@@ -4,6 +4,12 @@ import sys
 import time
 import torch
 from functools import wraps
+import numpy as np
+
+def seqstat(arr):
+    a = np.array(arr)
+    return '[ {:.3f} / {:.3f} / {:.3f} / {:.3f} ]'.format(
+        np.mean(a), np.min(a), np.max(a), np.std(a))
 
 t0 = 0
 def report_time(msg=''):
@@ -33,23 +39,28 @@ def profile_mem(function):
         fp = m2 - m1
         fname = function.__name__
         if fname in mtable:
-            mtable[fname] += fp
+            mtable[fname].append(fp)
         else:
-            mtable[fname] = fp
-        print ("GPU Mem: %s {:.3f} / {:.3f} / {:3.f} / {:.3f} MB".format(
-            fname.center(20,' '), m1, m2, fp, mtable[fname]))
+            mtable[fname] = [fp]
+        print ("GPU Mem: {}: {:.3f} / {:.3f} / {:.3f} / {} MB".format(
+            fname.center(20,' '), m1, m2, fp, seqstat(mtable[fname])))
         return result
     return gpu_mem_profiler
 
-
+ttable = {}
 def profile_time(function):
     @wraps(function)
     def function_timer(*args, **kwargs):
-        t0 = time.clock()
+        t0 = time.perf_counter()
         result = function(*args, **kwargs)
-        t1 = time.clock()
+        t1 = time.perf_counter()
         lat = t1 - t0
-        print ("CPU Time: {}: {:.3f} / {:.3f} / {:.3f} sec".format(
-            function.__name__.center(20,' '), t0, t1, lat))
+        fname = function.__name__
+        if fname in ttable:
+            ttable[fname].append(lat)
+        else:
+            ttable[fname] = [lat]
+        print ("CPU Time: {}: {:.3f} / {:.3f} / {:.3f} / {} sec".format(
+            fname.center(20,' '), t0, t1, lat, seqstat(ttable[fname])))
         return result
     return function_timer

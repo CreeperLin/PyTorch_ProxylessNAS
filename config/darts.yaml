@@ -39,6 +39,7 @@ train:
      - 0.999
     momentum: 0.9
     weight_decay: 0.001
+  aux_weight: 0.4
   w_grad_clip: 5.
   warmup_epochs: 20
   epochs: 50
@@ -57,7 +58,7 @@ valid:
     momentum: 0.9
     weight_decay: 0.0003
     nesterov: True
-  aux_weight: 0.0
+  aux_weight: 0.4
   drop_path_prob: 0.2
   w_grad_clip: 5.
   genotype: ''
@@ -73,11 +74,11 @@ model:
   channel_init: 16        # init channel
   channel_multiplier: 3   # init channel multiplier
   nodes: 4                # num of nodes (states) per layer
-  layers: 8               # num of DAG layers (cells) in model
+  layers: 20              # num of DAG layers (cells) in model
   inputs_model: 1
   inputs_layer: 2
   inputs_node: 1
-  auxiliary: False
+  auxiliary: True
   sepconv_stack: True
   w_latency: 0.0
   verbose: False

@@ -48,12 +48,11 @@ train:
   warmup_epochs: 5
   epochs: 200
   print_freq: 200
-  save_freq: 20
+  save_freq: 50
   plot_path: './searchs'
   gt_file: './searchs'
   architect:
     n_samples: 2
-    unrolled: False
     renorm: True
 ---
 valid:
@@ -74,7 +73,7 @@ valid:
   drop_path_prob: 0.0
   w_grad_clip: 0.0
   print_freq: 200
-  save_freq: 20
+  save_freq: 50
 ---
 model:
   type: 'proxyless-nas'

@@ -102,7 +102,7 @@ class AuxiliaryHead(nn.Module):
 
 
 class DARTSLikeNet(nn.Module):
-    def __init__(self, config, n_layers, shared_a, auxiliary, cell_cls, cell_kwargs):
+    def __init__(self, config, n_layers, shared_a, cell_cls, cell_kwargs):
         super().__init__()
         self.chn_in = config.channel_in
         self.chn = config.channel_init
@@ -145,8 +145,9 @@ class DARTSLikeNet(nn.Module):
             chn_out = chn_cur * config.nodes
             chn_pp, chn_p = chn_p, chn_out
             reduction_p = reduction
-            if auxiliary and i == self.aux_pos:
-                self.aux_head = AuxiliaryHead(32//4, chn_p, self.n_classes)
+            if i == self.aux_pos:
+                fm_size = 32
+                self.aux_head = AuxiliaryHead(fm_size//4, chn_p, self.n_classes)
         
         self.conv_last = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
@@ -165,7 +166,10 @@ class DARTSLikeNet(nn.Module):
         y = self.conv_last(s1)
         y = y.view(y.size(0), -1) # flatten
         y = self.fc(y)
-        return y if aux_logits is None else y, aux_logits
+        if aux_logits is None:
+            return y
+        else:
+            return y, aux_logits
     
     def build_from_genotype(self, gene, drop_path=True):
         assert len(self.cells) == len(gene.dag)

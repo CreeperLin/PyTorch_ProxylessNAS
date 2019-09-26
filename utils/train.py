@@ -156,10 +156,11 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         save_genotype(out_dir, genotype, epoch, logger)
         
         # genotype as a image
-        for i, dag in enumerate(model.dags()):
-            plot_path = os.path.join(config.plot_path, "EP{:02d}".format(epoch+1))
-            caption = "Epoch {}".format(epoch+1)
-            plot(genotype.dag[i], dag, plot_path + "-dag_{}".format(i), caption)
+        if config.plot:
+            for i, dag in enumerate(model.dags()):
+                plot_path = os.path.join(config.plot_path, "EP{:02d}".format(epoch+1))
+                caption = "Epoch {}".format(epoch+1)
+                plot(genotype.dag[i], dag, plot_path + "-dag_{}".format(i), caption)
         
         if best_top1 < top1:
             best_top1 = top1

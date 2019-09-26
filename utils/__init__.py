@@ -5,7 +5,6 @@ import time
 import logging
 import numpy as np
 import torch
-from tensorboardX import SummaryWriter
 import genotypes as gt
 
 def warmup_device(model, batch_size, device):
@@ -57,6 +56,7 @@ def check_config(hp, name):
         'data.search.jitter': False,
         'data.augment.jitter': False,
         'train.a_optim.betas': (0.9, 0.999),
+        'train.plot': False,
         'model.ops_order': 'act_weight_bn',
         'model.sepconv_stack': False,
         'model.label_smoothing': False,
@@ -129,7 +129,11 @@ class DummyWriter():
 
 
 def get_writer(log_dir, enabled):
-    writer = SummaryWriter(log_dir) if enabled else DummyWriter()
+    if enabled:
+        from tensorboardX import SummaryWriter
+        writer = SummaryWriter(log_dir)
+    else:
+        writer = DummyWriter()
     return writer
 
 

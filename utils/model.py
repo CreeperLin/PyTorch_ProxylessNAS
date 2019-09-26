@@ -256,7 +256,6 @@ def get_dartslike(config):
     darts_kwargs = {
         'n_layers': n_layers,
         'shared_a': False,
-        'auxiliary': config.auxiliary,
         'cell_cls': DAGLayer,
         'cell_kwargs': {
             'config': config,
@@ -318,7 +317,7 @@ def get_model(config, device, dev_list, genotype=None):
         n_params = param_count(model)
         print("Model params count: {:.3f} M, size: {:.3f} MB".format(n_params, mb_params))
         NASModule.set_device(dev_list)
-        warmup_device(model, 32, device)
+        # warmup_device(model, 32, device)
         return model, arch
     else:
         raise Exception("invalid model type")
