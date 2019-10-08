@@ -6,8 +6,6 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
-from torch.utils.data.sampler import SubsetRandomSampler
 import itertools
 
 # from utils.hparam import load_hparam_str
@@ -43,49 +41,14 @@ def save_genotype(out_dir, genotype, epoch, logger):
     except:
         logger.error("Save genotype failed")
 
-def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, logger, device, config):
-
-    if config.split:
-        data = train_data
-        n_train = len(data)
-        split = int(n_train * config.w_data_ratio)
-        print('# of w/a data: {}/{}'.format(split, n_train-split))
-        indices = list(range(n_train))
-        w_train_sampler = SubsetRandomSampler(indices[:split])
-        a_train_sampler = SubsetRandomSampler(indices[split:])
-        w_train_loader = DataLoader(data,
-                        batch_size=config.trn_batch_size,
-                        sampler=w_train_sampler,
-                        num_workers=config.workers,
-                        pin_memory=True)
-        a_train_loader = DataLoader(data,
-                        batch_size=config.trn_batch_size,
-                        sampler=a_train_sampler,
-                        num_workers=config.workers,
-                        pin_memory=True)
-        if valid_data is None:
-            valid_loader = a_train_loader
-        else:
-            valid_loader = DataLoader(valid_data,
-                batch_size=config.val_batch_size,
-                num_workers=config.num_workers,
-                shuffle=False, pin_memory=True, drop_last=False)
-    else:
-        a_train_loader = DataLoader(valid_data,
-            batch_size=config.trn_batch_size,
-            num_workers=config.num_workers,
-            shuffle=False, pin_memory=True, drop_last=False)
-        w_train_loader = DataLoader(train_data,
-            batch_size=config.trn_batch_size,
-            num_workers=config.num_workers,
-            shuffle=True, pin_memory=True, drop_last=True)
-        valid_loader = a_train_loader
+def search(out_dir, chkpt_path, w_train_loader, a_train_loader, model, arch, writer, logger, device, config):
+    valid_loader = a_train_loader
     
     w_optim = utils.get_optim(model.weights(), config.w_optim)
     a_optim = utils.get_optim(model.alphas(), config.a_optim)
 
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        w_optim, config.epochs, eta_min=config.w_optim.lr_min)
+    warmup_lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        w_optim, config.warmup_epochs, eta_min=config.w_optim.lr_min)
 
     init_epoch = -1
 
@@ -115,8 +78,8 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         for epoch in itertools.count(init_epoch+1):
             if epoch == tot_epochs: break
 
-            lr_scheduler.step()
-            lr = lr_scheduler.get_lr()[0]
+            warmup_lr_scheduler.step()
+            lr = warmup_lr_scheduler.get_lr()[0]
 
             # training
             train(w_train_loader, None, model, writer, logger, architect, w_optim, a_optim, lr, epoch, device, config)
@@ -128,6 +91,9 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
             print("")
     except KeyboardInterrupt:
         print('skipped')
+    
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        w_optim, config.epochs, eta_min=config.w_optim.lr_min, last_epoch=0)
     
     save_checkpoint(out_dir, model, w_optim, a_optim, lr_scheduler, init_epoch, logger)
     save_genotype(out_dir, model.genotype(), init_epoch, logger)
@@ -142,7 +108,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         lr_scheduler.step()
         lr = lr_scheduler.get_lr()[0]
 
-        model.print_alphas(logger)
+        # model.print_alphas(logger)
 
         # training
         train(w_train_loader, a_train_loader, model, writer, logger, architect, w_optim, a_optim, lr, epoch, device, config)
@@ -159,7 +125,7 @@ def search(out_dir, chkpt_path, train_data, valid_data, model, arch, writer, log
         if config.plot:
             for i, dag in enumerate(model.dags()):
                 plot_path = os.path.join(config.plot_path, "EP{:02d}".format(epoch+1))
-                caption = "Epoch {}".format(epoch+1)
+                caption = "Epoch {} - DAG {}".format(epoch+1, i)
                 plot(genotype.dag[i], dag, plot_path + "-dag_{}".format(i), caption)
         
         if best_top1 < top1:
@@ -206,9 +172,8 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
         # phase 1. child network step (w)
         w_optim.zero_grad()
         tprof.timer_start('search-train')
-        logits = model(trn_X)
+        loss, logits = model.loss(trn_X, trn_y, config.aux_weight)
         tprof.timer_stop('search-train')
-        loss = model.criterion(logits, trn_y)
         loss.backward()
         # gradient clipping
         if config.w_grad_clip > 0:
@@ -235,9 +200,9 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
         if step % config.print_freq == 0 or step == len(train_loader)-1:
             eta = eta_m.step(step)
             logger.info(
-                "Train: [{:2d}/{}] Step {:03d}/{:03d} Loss {losses.avg:.3f} "
+                "Train: [{:2d}/{}] Step {:03d}/{:03d} LR {:.3f} Loss {losses.avg:.3f} "
                 "Prec@(1,5) ({top1.avg:.1%}, {top5.avg:.1%}) | ETA: {eta}".format(
-                    epoch+1, tot_epochs, step, len(train_loader)-1, losses=losses,
+                    epoch+1, tot_epochs, step, len(train_loader)-1, lr, losses=losses,
                     top1=top1, top5=top5, eta=utils.format_time(eta)))
 
         writer.add_scalar('train/loss', loss.item(), cur_step)

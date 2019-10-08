@@ -79,7 +79,8 @@ class NASModule(nn.Module):
     @staticmethod
     def add_param(params_shape):
         NASModule._param_id += 1
-        param = nn.Parameter(1e-3*torch.randn(params_shape))
+        init_ratio = 1e-3
+        param = nn.Parameter(init_ratio*torch.randn(params_shape))
         NASModule._params.append(param)
         NASModule._params_map[NASModule._param_id] = []
         return NASModule._param_id
@@ -437,9 +438,15 @@ class NASController(nn.Module):
                                              devices=self.device_ids)
         return nn.parallel.gather(outputs, self.device_ids[0])
     
-    def loss(self, X, y):
-        logits = self.forward(X)
-        return self.criterion(logits, y)
+    def loss(self, X, y, aux_weight):
+        ret = self.forward(X)
+        if isinstance(ret, tuple):
+            logits, aux_logits = ret
+            aux_loss = aux_weight * self.criterion(aux_logits, y)
+        else:
+            logits = ret
+            aux_loss = 0
+        return self.criterion(logits, y) + aux_loss, logits
 
     def print_alphas(self, logger):
         # remove formats
@@ -508,11 +515,3 @@ class NASController(nn.Module):
         for module in self.modules():
             if isinstance(module, DropPath_):
                 module.p = p
-
-
-class GradPseudoNet(nn.Module):
-    def __init__(self):
-        pass
-    
-    def forward(self, x):
-        pass

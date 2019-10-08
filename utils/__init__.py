@@ -29,10 +29,12 @@ def parse_gpus(gpus):
 
 def check_config(hp, name):
     required = (
-        # 'data.train',
-        # 'data.val',
-        'data.search.type',
-        'data.augment.type',
+        'search.data.type',
+        'augment.data.type',
+        'search.data.train_root',
+        'search.data.valid_root',
+        'augment.data.train_root',
+        'augment.data.valid_root',
     )
     
     flag = False
@@ -49,14 +51,14 @@ def check_config(hp, name):
             flag = True
 
     defaults = {
-        'data.search.root': './data',
-        'data.augment.root': './data',
-        'data.search.cutout': 0,
-        'data.augment.cutout': 16,
-        'data.search.jitter': False,
-        'data.augment.jitter': False,
-        'train.a_optim.betas': (0.9, 0.999),
-        'train.plot': False,
+        'search.data.dloader.cutout': 0,
+        'augment.data.dloader.cutout': 16,
+        'search.data.dloader.jitter': False,
+        'augment.data.dloader.jitter': False,
+        'search.a_optim.betas': (0.9, 0.999),
+        'search.plot': False,
+        'search.aux_weight': 0.0,
+        'augment.aux_weight': 0.0,
         'model.ops_order': 'act_weight_bn',
         'model.sepconv_stack': False,
         'model.label_smoothing': False,
@@ -80,8 +82,8 @@ def check_config(hp, name):
     if flag:
         return True
 
-    hp.train.path = os.path.join('searchs', name)
-    hp.train.plot_path = os.path.join(hp.train.path, 'plot')
+    hp.search.path = os.path.join('searchs', name)
+    hp.search.plot_path = os.path.join(hp.search.path, 'plot')
     print('check_config: OK')
     return False
 
@@ -165,11 +167,11 @@ def get_lr_scheduler(config):
     return lr_scheduler
 
 def get_genotype(config, ovr_genotype):
-    g_str = config.valid.genotype
+    g_str = config.genotype
     if not ovr_genotype is None:
         genotype = gt.from_file(ovr_genotype)
     elif g_str == '':
-        genotype = gt.from_file(config.valid.gt_file)
+        genotype = gt.from_file(config.gt_file)
     else:
         genotype = gt.from_str(g_str)
     return genotype

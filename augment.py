@@ -50,17 +50,17 @@ def main():
     
     dev, dev_list = utils.init_device(hp.device, args.device)
 
-    train_data = load_data(hp.data.augment)
-    val_data = load_data(hp.data.augment, True)
+    trn_loader = load_data(hp.augment.data, validation=False)
+    val_loader = load_data(hp.augment.data, validation=True)
 
     gt.set_primitives(hp.genotypes)
 
     # load genotype
-    genotype = utils.get_genotype(hp, args.genotype)
+    genotype = utils.get_genotype(hp.augment, args.genotype)
     
     model, arch = get_model(hp.model, dev, dev_list, genotype)
 
-    augment(out_dir, args.chkpt, train_data, val_data, model, writer, logger, dev, hp.valid)
+    augment(out_dir, args.chkpt, trn_loader, val_loader, model, writer, logger, dev, hp.augment)
 
 
 if __name__ == '__main__':

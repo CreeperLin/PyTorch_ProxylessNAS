@@ -1,22 +1,14 @@
 import math
-from queue import Queue
 import copy
 import random
-
-import genotypes as gt
-from models.nas_modules import NASModule, BinGateMixedOp
-
 import numpy as np
-import math
-
 import torch
 import torch.nn as nn
-from models.nas_modules import NASModule
+from queue import Queue
 from utils import param_count
 
 def cuda_available():
 	return torch.cuda.is_available()
-
 
 def list_sum(x):
 	if len(x) == 1:
@@ -25,7 +17,6 @@ def list_sum(x):
 		return x[0] + x[1]
 	else:
 		return x[0] + list_sum(x[1:])
-
 
 def accuracy(output, target, topk=(1,)):
 	""" Computes the precision@k for the specified values of k """
@@ -66,58 +57,6 @@ class AverageMeter(object):
 		self.sum += val * n
 		self.count += n
 		self.avg = self.sum / self.count
-
-
-class Cutout(object):
-	"""Randomly mask out one or more patches from an image.
-	
-	please refer to https://github.com/uoguelph-mlrg/Cutout/blob/master/util/cutout.py
-	Args:
-	    n_holes (int): Number of patches to cut out of each image.
-	    length (int): The length (in pixels) of each square patch.
-	"""
-	
-	def __init__(self, n_holes, length):
-		self.n_holes = n_holes
-		self.length = length
-	
-	def __call__(self, img):
-		"""
-		Args:
-			img (Tensor): Tensor image of size (C, H, W).
-		Returns:
-			Tensor: Image with n_holes of dimension length x length cut out of it.
-		"""
-		if isinstance(img, np.ndarray):
-			h = img.shape[1]
-			w = img.shape[2]
-		else:
-			h = img.size(1)
-			w = img.size(2)
-		
-		mask = np.ones((h, w), np.float32)
-		
-		for n in range(self.n_holes):
-			# center point of the cutout region
-			y = np.random.randint(h)
-			x = np.random.randint(w)
-			
-			width = int(self.length / 2)
-			y1 = np.clip(y - width, 0, h)
-			y2 = np.clip(y + width, 0, h)
-			x1 = np.clip(x - width, 0, w)
-			x2 = np.clip(x + width, 0, w)
-			
-			mask[y1: y2, x1: x2] = 0.0
-		
-		if isinstance(img, np.ndarray):
-			mask = np.expand_dims(mask, axis=0)
-		else:
-			mask = torch.from_numpy(mask)
-			mask = mask.expand_as(img)
-		
-		return img * mask
-
 
 class TransitionBlock(nn.Module):
 	def __init__(self, layers):
@@ -160,7 +99,6 @@ class TransitionBlock(nn.Module):
 class BasicBlockWiseConvNet(nn.Module):
 	def __init__(self, blocks, classifier):
 		super(BasicBlockWiseConvNet, self).__init__()
-		NASModule.param_forward()
 		self.blocks = nn.ModuleList(blocks)
 		self.classifier = classifier
 	

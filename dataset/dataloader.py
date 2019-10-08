@@ -5,128 +5,44 @@ import torch
 from torchvision import transforms, datasets
 import numpy as np
 
+def get_dataloader(config, metadata):
+    if config.type == 'pytorch':
+        from .torch_dataloader import get_torch_dataloader
+        return get_torch_dataloader(config, metadata)
+    elif config.type == 'dali':
+        from .dali_dataloader import get_dali_dataloader
+        return get_dali_dataloader(config, metadata)
+    else:
+        raise ValueError('unsupported dataloader: {}'.format(config.type))
 
-class Cutout(object):
-    def __init__(self, length):
-        self.length = length
-
-    def __call__(self, img):
-        h, w = img.size(1), img.size(2)
-        mask = np.ones((h, w), np.float32)
-        y = np.random.randint(h)
-        x = np.random.randint(w)
-
-        y1 = np.clip(y - self.length // 2, 0, h)
-        y2 = np.clip(y + self.length // 2, 0, h)
-        x1 = np.clip(x - self.length // 2, 0, w)
-        x2 = np.clip(x + self.length // 2, 0, w)
-
-        mask[y1: y2, x1: x2] = 0.
-        mask = torch.from_numpy(mask)
-        mask = mask.expand_as(img)
-        img *= mask
-
-        return img
-
-
-def load_data(config, validation=False):
-    """ Get dataset """
+def load_data(config, validation):
     dataset = config.type.lower()
 
-    data_root = config.root
-    os.makedirs(data_root, exist_ok=True)
+    root = config.valid_root if validation else config.train_root
+    os.makedirs(root, exist_ok=True)
     
     if dataset == 'cifar10':
-        dset = datasets.CIFAR10
         MEAN = [0.49139968, 0.48215827, 0.44653124]
         STD = [0.24703233, 0.24348505, 0.26158768]
-        trn_transf = [
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip()
-        ]
-        val_transf = []
     elif dataset == 'cifar100':
-        dset = datasets.CIFAR100
         MEAN = [0.5070751592371323, 0.48654887331495095, 0.4409178433670343]
         STD = [0.2673342858792401, 0.2564384629170883, 0.27615047132568404]
-        trn_transf = [
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip()
-        ]
-        val_transf = []
     elif dataset == 'mnist':
-        dset = datasets.MNIST
         MEAN = [0.13066051707548254]
         STD = [0.30810780244715075]
-        trn_transf = [
-            transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.9, 1.1), shear=0.1)
-        ]
-        val_transf = []
     elif dataset == 'fashionmnist':
-        dset = datasets.FashionMNIST
         MEAN = [0.28604063146254594]
         STD = [0.35302426207299326]
-        trn_transf = [
-            transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.9, 1.1), shear=0.1),
-            transforms.RandomVerticalFlip()
-        ]
-        val_transf = []
     elif dataset == 'imagenet':
-        dset = datasets.ImageFolder
         MEAN = [0.485, 0.456, 0.406]
         STD = [0.229, 0.224, 0.225]
-        trn_transf = [
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-        ]
-        val_transf = [
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-        ]
     elif dataset == 'image':
-        dset = datasets.ImageFolder
         MEAN = [0.5, 0.5, 0.5]
         STD = [0, 0, 0]
-        trn_transf = [
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-        ]
-        val_transf = [
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-        ]
     else:
-        raise ValueError('not expected dataset = {}'.format(dataset))
-
-    if config.jitter:
-        trn_transf.append(transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1))
+        raise ValueError('unsupported dataset: {}'.format(dataset))
     
-    normalize = [transforms.ToTensor(), transforms.Normalize(MEAN, STD)]
-    trn_transf.extend(normalize)
-    val_transf.extend(normalize)
+    metadata = (dataset, root, MEAN, STD, validation)
 
-    if config.cutout > 0:
-        trn_transf.append(Cutout(config.cutout))
-    
-    if dset == datasets.ImageFolder:
-        if validation:
-            data = dset(config.val, transform=transforms.Compose(trn_transf))
-        else:
-            data = dset(config.train, transform=transforms.Compose(trn_transf))
-    elif validation:
-        data = dset(config.root, train = False, 
-                transform=transforms.Compose(val_transf), download = True)
-    else:
-        data = dset(config.root, train = True,
-                transform=transforms.Compose(trn_transf), download = True)
-    
-    # if config.split:
-    #     n_train = len(data)
-    #     split = int(n_train * config.sp_ratio)
-    #     print('# of train/val data: {}/{}'.format(split, n_train-split))
-    #     trn_data = data
-    #     val_data = copy.deepcopy(data)
-    #     trn_data.data = data.data[]
-
-    return data
+    return get_dataloader(config.dloader, metadata)
 

@@ -50,14 +50,13 @@ def main():
     
     dev, dev_list = utils.init_device(hp.device, args.device)
 
-    train_data = load_data(hp.data.search)
+    trn_loader, val_loader = load_data(hp.search.data, validation=False)
 
     gt.set_primitives(hp.genotypes)
-    print(gt.get_primitives())
 
     model, arch = get_model(hp.model, dev, dev_list)    
 
-    search(out_dir, args.chkpt, train_data, None, model, arch, writer, logger, dev, hp.train)
+    search(out_dir, args.chkpt, trn_loader, val_loader, model, arch, writer, logger, dev, hp.search)
 
 
 if __name__ == '__main__':

@@ -292,10 +292,10 @@ model_creator = {
 }
 
 def get_net_crit(config):
-    if config.label_smoothing:
-        crit = CrossEntropyLoss_LS
+    if config.label_smoothing > 0:
+        crit = CrossEntropyLoss_LS(config.label_smoothing)
     else:
-        crit = nn.CrossEntropyLoss
+        crit = nn.CrossEntropyLoss()
     return crit
 
 # @profile_mem
@@ -305,7 +305,7 @@ def get_model(config, device, dev_list, genotype=None):
     if mtype in model_creator:
         config.augment = not genotype is None
         net, arch = model_creator[mtype](config)
-        crit = get_net_crit(config)().to(device)
+        crit = get_net_crit(config).to(device)
         prim = gt.get_primitives()
         model = NASController(config, net, crit, prim, dev_list).to(device)
         if config.augment:

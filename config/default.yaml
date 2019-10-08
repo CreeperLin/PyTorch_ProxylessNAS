@@ -1,28 +1,18 @@
-data:
-  search:
-    # split: False # split training data into train/val set
-    # sp_ratio: 0.5 # split ratio
-    train: './data/ILSVRC2012' # path to train data (ImageNet)
-    val: '' # path to validation data (ImageNet)
+search:
+  data:
     type: 'CIFAR10'
-    jitter: False
     # type: 'MNIST'
     # type: 'ImageNet'
-  augment:
-    split: False
-    train: ''
-    val: ''
-    type: 'CIFAR10'
-    jitter: False
-    # type: 'MNIST'
-    # type: 'ImageNet'
----
-train:
-  split: True
-  w_data_ratio: 0.9
-  trn_batch_size: 64
-  val_batch_size: 64
-  workers: 4
+    train_root: './data'
+    valid_root: './data'
+    dloader:
+      type: 'pytorch'
+      split_ratio: 0.8
+      trn_batch_size: 64
+      val_batch_size: 64
+      workers: 2
+      cutout: 0
+      jitter: True
   w_optim:
     type: 'sgd'
     lr: 0.035
@@ -39,26 +29,36 @@ train:
     betas: 
       - 0.0
       - 0.999
-    momentum: 0.9
-    weight_decay: 0.001
+    weight_decay: 0
   lr_schduler:
     type: 'cosine'
+  architect:
+    n_samples: 0
+    renorm: True
   w_grad_clip: 0.0
   drop_path_prob: 0.0
-  warmup_epochs: 5
+  warmup_epochs: 50
   epochs: 200
   print_freq: 200
-  save_freq: 50
+  save_freq: 100
   plot_path: './searchs'
   gt_file: './searchs'
-  architect:
-    n_samples: 2
-    renorm: True
 ---
-valid:
-  trn_batch_size: 64
-  val_batch_size: 64
-  workers: 4
+augment:
+  data:
+    type: 'CIFAR10'
+    # type: 'MNIST'
+    # type: 'ImageNet'
+    train_root: './data'
+    valid_root: './data'
+    dloader:
+      type: 'pytorch'
+      split_ratio: 0
+      trn_batch_size: 64
+      val_batch_size: 64
+      workers: 2
+      cutout: 16
+      jitter: True
   epochs: 600
   genotype: ''
   gt_file: ''
@@ -69,11 +69,10 @@ valid:
     momentum: 0.9
     weight_decay: 0.0001
     nesterov: True
-  aux_weight: 0.0
   drop_path_prob: 0.0
   w_grad_clip: 0.0
   print_freq: 200
-  save_freq: 50
+  save_freq: 100
 ---
 model:
   type: 'proxyless-nas'
@@ -96,7 +95,7 @@ model:
   affine: False
   samples: 1
   w_latency: 0
-  label_smoothing: False
+  label_smoothing: 0.1
   verbose: False
 ---
 genotypes:
@@ -112,6 +111,7 @@ genotypes:
 log:
   chkpt_dir: 'chkpt'
   log_dir: 'logs'
+  writer: False
 ---
 device:
   gpus: 'all'

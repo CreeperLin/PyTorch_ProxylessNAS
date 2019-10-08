@@ -107,13 +107,14 @@ class DARTSLikeNet(nn.Module):
         self.chn_in = config.channel_in
         self.chn = config.channel_init
         self.n_classes = config.classes
+        self.shared_a = shared_a
         self.n_inputs_model = config.inputs_model
         assert self.n_inputs_model == 1
         self.n_inputs_layer = config.inputs_layer
         assert self.n_inputs_layer == 2
         self.n_inputs_node = config.inputs_node
         assert self.n_inputs_node == 1
-        self.aux_pos = 2*n_layers//3 if config.auxiliary else -1
+        self.aux_pos = 2*n_layers//3 if config.auxiliary and config.augment else -1
 
         chn_cur = self.chn * config.channel_multiplier
         self.conv_first = nn.Sequential(

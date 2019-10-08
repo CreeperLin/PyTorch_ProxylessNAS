@@ -15,16 +15,7 @@ from visualize import plot
 from profile.profiler import tprof
 from models.nas_modules import NASModule
 
-def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, device, config):
-    
-    valid_loader = DataLoader(valid_data,
-        batch_size=config.val_batch_size,
-        num_workers=config.workers,
-        shuffle=False, pin_memory=True, drop_last=False)
-    train_loader = DataLoader(train_data,
-        batch_size=config.trn_batch_size,
-        num_workers=config.workers,
-        shuffle=True, pin_memory=True, drop_last=True)
+def augment(out_dir, chkpt_path, train_loader, valid_loader, model, writer, logger, device, config):
     
     w_optim = utils.get_optim(model.weights(), config.w_optim)
 
@@ -40,10 +31,11 @@ def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, 
         w_optim.load_state_dict(checkpoint['w_optim'])
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
         init_epoch = checkpoint['epoch']
-
     else:
         logger.info("Starting new training run")
 
+    logger.info("Model params count: {:.3f} M, size: {:.3f} MB".format(utils.param_size(model), utils.param_count(model)))
+    
     # training loop
     logger.info('training begin')
     best_top1 = 0.
@@ -54,11 +46,11 @@ def augment(out_dir, chkpt_path, train_data, valid_data, model, writer, logger, 
         drop_prob = config.drop_path_prob * epoch / tot_epochs
         model.drop_path_prob(drop_prob)
 
-        lr_scheduler.step()
         lr = lr_scheduler.get_lr()[0]
 
         # training
         train(train_loader, model, writer, logger, w_optim, epoch, tot_epochs, lr, device, config)
+        lr_scheduler.step()
 
         # validation
         cur_step = (epoch+1) * len(train_loader)
@@ -99,7 +91,6 @@ def train(train_loader, model, writer, logger, optim, epoch, tot_epochs, lr, dev
     losses = utils.AverageMeter()
 
     cur_step = epoch*len(train_loader)
-    logger.info("Epoch {} LR {}".format(epoch, lr))
     writer.add_scalar('train/lr', lr, cur_step)
 
     model.train()
@@ -111,15 +102,8 @@ def train(train_loader, model, writer, logger, optim, epoch, tot_epochs, lr, dev
 
         optim.zero_grad()
         tprof.timer_start('augment-train')
-        logits = model(X)
+        loss, logits = model.loss(X, y, config.aux_weight)
         tprof.timer_stop('augment-train')
-        if config.aux_weight > 0.:
-            logits, aux_logits = model(X)
-            loss = config.aux_weight * model.criterion(aux_logits, y)
-        else:
-            logits = model(X)
-            loss = 0
-        loss = model.criterion(logits, y) + loss
         loss.backward()
         # gradient clipping
         if config.w_grad_clip > 0:

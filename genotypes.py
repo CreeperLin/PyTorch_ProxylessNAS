@@ -6,8 +6,6 @@
 """
 import os
 from collections import namedtuple
-import torch
-import torch.nn as nn
 from models import ops
 
 Genotype = namedtuple('Genotype', 'dag ops')
@@ -57,6 +55,7 @@ deabbr = {
 def set_primitives(prim):
     global PRIMITIVES
     PRIMITIVES = prim
+    print('candidate ops: {}'.format(get_primitives()))
 
 def get_primitives():
     return PRIMITIVES
