@@ -1,21 +1,18 @@
 # -*- coding: utf-8 -*-
-
 import logging
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import genotypes as gt
 from models.ops import OPS, Identity, DropPath_
-from profile.profiler import tprof
+from utils.profiling import tprof
 from torch.nn.parallel._functions import Broadcast
 from utils import param_size, param_count
 
 def broadcast_list(l, device_ids):
     """ Broadcasting list """
     l_copies = Broadcast.apply(device_ids, l)
-    # l_copies = [l_copies[i:i+len(l)] for i in range(0, len(l_copies), len(l))]
     return l_copies
-
 
 class NASModule(nn.Module):
     _modules = []
@@ -35,7 +32,6 @@ class NASModule(nn.Module):
             self.pid = NASModule.add_param(params_shape)
             NASModule.new_shared_p = False
         NASModule.add_module(self, self.id, self.pid)
-        # print('reg NAS module: {} {}'.format(self.id, self.pid))
     
     @staticmethod
     def nasmod_state_dict():
@@ -248,7 +244,7 @@ class DARTSMixedOp(NASModule):
         return sum(w * op(x) for w, op in zip(w_path_f.to(device=x.device), self._ops))
     
     def to_genotype(self, k, ops):
-        # assert ops[-1] == 'none'
+        assert ops[-1] == 'none'
         if self.pid == -1: return -1, [None]
         w = F.softmax(self.get_param().detach(), dim=-1)
         w_max, prim_idx = torch.topk(w[:-1], 1)
@@ -266,7 +262,7 @@ class DARTSMixedOp(NASModule):
             )
         self.op = op
         self.fixed = True
-        print("DARTSMixedOp: chn_in:{} stride:{} op:{} #p:{:.6f}".format(self.chn_in, self.stride, op_name, param_count(self)))
+        # print("DARTSMixedOp: chn_in:{} stride:{} op:{} #p:{:.6f}".format(self.chn_in, self.stride, op_name, param_count(self)))
 
 
 class BinGateMixedOp(NASModule):
@@ -282,7 +278,6 @@ class BinGateMixedOp(NASModule):
             self.agg_weight = nn.Parameter(torch.zeros(self.in_deg, requires_grad=True))
             self.chn_in = chn_in[0]
         self.n_samples = config.samples
-        self.w_lat = config.w_latency
         self.stride = stride
         if not config.augment:
             self._ops = nn.ModuleList()
@@ -323,24 +318,18 @@ class BinGateMixedOp(NASModule):
         self.set_state('x_f'+dev_id, x.detach())
         smp = self.get_state('s_path_f')
         self.swap_ops(smp, x.device)
-        mid = str(self.id) + '_' + str(int(smp[0]))
-        tprof.timer_start(mid)
         m_out = sum(self._ops[i](x) for i in smp)
-        tprof.timer_stop(mid)
         self.set_state('m_out'+dev_id, m_out)
         tprof.add_acc_item('model_'+dev_id, mid)
         return m_out
-        # torch.cuda.empty_cache()
 
     def swap_ops(self, samples, device):
         for i, op in enumerate(self._ops):
             if i in samples:
-                # op.to(device=device)
                 for p in op.parameters():
                     if not p.is_leaf: continue
                     p.requires_grad = True
             else:
-                # op.to(device='cpu')
                 for p in op.parameters():
                     if not p.is_leaf: continue
                     p.requires_grad = False
@@ -349,20 +338,14 @@ class BinGateMixedOp(NASModule):
     def param_grad(self, m_grad):
         a_grad = 0
         for dev in NASModule.get_device():
-            tid = str(self.id)
-            tprof.timer_start(tid)
             a_grad = self.param_grad_dev(m_grad, dev) + a_grad
-            tprof.timer_stop(tid)
-            tprof.print_stat(tid)
         return a_grad
     
     def param_grad_dev(self, m_grad, dev_id):
         with torch.no_grad():
             sample_ops = self.get_state('s_op')
             a_grad = torch.zeros(self.params_shape)
-            m_out = self.get_state('m_out'+dev_id)
-            m_out.detach_()
-            # y_grad = (torch.autograd.grad(loss, m_out, retain_graph=False,only_inputs=False)[0]).detach()
+            m_out = self.get_state('m_out'+dev_id).detach()
             x_f = self.get_state('x_f'+dev_id)
             w_path_f = self.get_state('w_path_f')
             s_path_f = self.get_state('s_path_f')
@@ -371,21 +354,15 @@ class BinGateMixedOp(NASModule):
                     op_out = m_out
                 else:
                     op = self._ops[oj].to(device=x_f.device)
-                    op_out = op(x_f)
-                    op_out.detach_()
-                    # op.to(device='cpu')
-                g_grad = torch.sum(torch.mul(m_grad, op_out))
-                g_grad.detach_()
-                mid = str(self.id) + '_' + str(int(oj))
-                lat_term = 0 if self.w_lat == 0 else tprof.avg(mid) * self.w_lat
+                    op_out = op(x_f).detach()
+                g_grad = torch.sum(torch.mul(m_grad, op_out)).detach()
                 for i, oi in enumerate(sample_ops):
                     kron = 1 if i==j else 0
-                    a_grad[oi] += (g_grad + lat_term) * w_path_f[j] * (kron - w_path_f[i])
+                    a_grad[oi] += g_grad * w_path_f[j] * (kron - w_path_f[i])
             a_grad.detach_()
         return a_grad
     
     def to_genotype(self, k, ops):
-        # assert ops[-1] == 'none'
         if self.pid == -1: return -1, [None]
         w = F.softmax(self.get_param().detach(), dim=-1)
         w_max, prim_idx = torch.topk(w, 1)
@@ -403,7 +380,7 @@ class BinGateMixedOp(NASModule):
             )
         self.op = op
         self.fixed = True
-        print("BinGateMixedOp: chn_in:{} stride:{} op:{} #p:{:.6f}".format(self.chn_in, self.stride, op_name, param_count(self)))
+        # print("BinGateMixedOp: chn_in:{} stride:{} op:{} #p:{:.6f}".format(self.chn_in, self.stride, op_name, param_count(self)))
 
 
 class NASController(nn.Module):
@@ -438,7 +415,7 @@ class NASController(nn.Module):
                                              devices=self.device_ids)
         return nn.parallel.gather(outputs, self.device_ids[0])
     
-    def loss(self, X, y, aux_weight):
+    def loss(self, X, y, aux_weight=0):
         ret = self.forward(X)
         if isinstance(ret, tuple):
             logits, aux_logits = ret
@@ -507,7 +484,7 @@ class NASController(nn.Module):
     def alpha_backward(self, loss):
         NASModule.param_backward(loss)
     
-    def mops(self):
+    def mixed_ops(self):
         return NASModule.modules()
     
     def drop_path_prob(self, p):

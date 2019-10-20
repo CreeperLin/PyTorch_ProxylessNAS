@@ -5,8 +5,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from models.layers import DAGLayer
-from utils.profiling import profile_time
-from profile.profiler import tprof
 import models.ops as ops
 from models.layers import PreprocLayer
 
@@ -50,7 +48,6 @@ class BinGateNet(nn.Module):
         )
         self.fc = nn.Linear(self.dag_layers[-1].chn_out, self.n_classes)
 
-    # @profile_time
     def forward(self, x):
         y = self.conv_first(x)
         for dag in self.dag_layers:

@@ -1,26 +1,18 @@
-data:
-  search:
-    # split: False # split training data into train/val set
-    # sp_ratio: 0.5 # split ratio
-    train: './data/ILSVRC2012' # path to train data (ImageNet)
-    val: '' # path to validation data (ImageNet)
+search:
+  data:
     type: 'CIFAR10'
     # type: 'MNIST'
     # type: 'ImageNet'
-  augment:
-    split: False
-    train: ''
-    val: ''
-    type: 'CIFAR10'
-    # type: 'MNIST'
-    # type: 'ImageNet'
----
-train:
-  split: True
-  w_data_ratio: 0.5
-  trn_batch_size: 64
-  val_batch_size: 64
-  workers: 4
+    train_root: './data'
+    valid_root: './data'
+    dloader:
+      type: 'pytorch'
+      split_ratio: 0.5
+      trn_batch_size: 64
+      val_batch_size: 64
+      workers: 2
+      cutout: 0
+      jitter: True
   w_optim:
     type: 'sgd'
     lr: 0.025
@@ -48,10 +40,21 @@ train:
   plot: False
   plot_path: './searchs'
 ---
-valid:
-  trn_batch_size: 96
-  val_batch_size: 96
-  workers: 4
+augment:
+  data:
+    type: 'CIFAR10'
+    # type: 'MNIST'
+    # type: 'ImageNet'
+    train_root: './data'
+    valid_root: './data'
+    dloader:
+      type: 'pytorch'
+      split_ratio: 0
+      trn_batch_size: 96
+      val_batch_size: 96
+      workers: 2
+      cutout: 16
+      jitter: True
   w_optim:
     type: 'sgd'
     lr: 0.025
@@ -80,8 +83,10 @@ model:
   inputs_layer: 2
   inputs_node: 1
   auxiliary: True
+  ops_order: 'act_weight_bn'
+  label_smoothing: 0.1
+  affine: False
   sepconv_stack: True
-  w_latency: 0.0
   verbose: False
 ---
 genotypes:
@@ -98,6 +103,7 @@ genotypes:
 log:
   chkpt_dir: 'chkpt'
   log_dir: 'logs'
+  writer: False
 ---
 device:
   gpus: 'all'

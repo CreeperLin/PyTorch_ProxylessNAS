@@ -8,7 +8,7 @@ import torch
 import logging
 import argparse
 
-from utils.eval import augment
+from utils.routine import augment
 from utils.hparam import HParam
 from utils.model import get_model
 import utils
@@ -17,7 +17,7 @@ import genotypes as gt
 from dataset.dataloader import load_data
 
 def main():
-    parser = argparse.ArgumentParser(description='augment Proxyless-NAS')
+    parser = argparse.ArgumentParser(description='Proxyless-NAS augment')
     parser.add_argument('-n', '--name', type=str, required=True,
                         help="name of the model")
     parser.add_argument('-c','--config',type=str, default='./config/default.yaml',
@@ -46,7 +46,6 @@ def main():
         raise Exception("Config error.")
 
     writer = utils.get_writer(log_dir, hp.log.writer)
-    # writer.add_text('config', hp_str, 0)
     
     dev, dev_list = utils.init_device(hp.device, args.device)
 

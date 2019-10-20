@@ -9,9 +9,6 @@ def get_dataloader(config, metadata):
     if config.type == 'pytorch':
         from .torch_dataloader import get_torch_dataloader
         return get_torch_dataloader(config, metadata)
-    elif config.type == 'dali':
-        from .dali_dataloader import get_dali_dataloader
-        return get_dali_dataloader(config, metadata)
     else:
         raise ValueError('unsupported dataloader: {}'.format(config.type))
 

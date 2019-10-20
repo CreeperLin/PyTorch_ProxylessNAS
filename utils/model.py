@@ -69,9 +69,6 @@ def get_proxylessnasnet(config):
 		}
     }
     net = ProxylessNASNet.set_standard_net(data_shape=(chn_in, 32, 32), n_classes=n_classes, **model_config)
-    net_config = net.get_config()
-    net_save_path = './net.config'
-    json.dump(net_config, open(net_save_path, 'w'), indent=4)
     arch = BinaryGateArchitect
     return net, arch
 
@@ -298,7 +295,6 @@ def get_net_crit(config):
         crit = nn.CrossEntropyLoss()
     return crit
 
-# @profile_mem
 def get_model(config, device, dev_list, genotype=None):
     mtype = config.type
     configure_ops(config)
@@ -317,7 +313,6 @@ def get_model(config, device, dev_list, genotype=None):
         n_params = param_count(model)
         print("Model params count: {:.3f} M, size: {:.3f} MB".format(n_params, mb_params))
         NASModule.set_device(dev_list)
-        # warmup_device(model, 32, device)
         return model, arch
     else:
         raise Exception("invalid model type")

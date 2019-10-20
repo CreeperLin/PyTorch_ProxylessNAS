@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import genotypes as gt
 from utils import param_size, param_count
-from profile.profiler import tprof
 from models.nas_modules import NASModule
 
 edge_id = 0
@@ -93,8 +92,8 @@ class DAGLayer(nn.Module):
                 self.num_edges += num_edges
                 chn_states.append(self.merger_state.chn_out([ei.chn_out for ei in self.dag[i]]))
                 self.chn_out = self.merger_out.chn_out(chn_states)
-            print('DAGLayer: etype:{} chn_in:{} chn:{} #n:{} #e:{}'.format(str(edge_cls), self.chn_in, edge_kwargs['chn_in'][0],self.n_nodes, self.num_edges))
-            print('DAGLayer param count: {:.6f}'.format(param_count(self)))
+            # print('DAGLayer: etype:{} chn_in:{} chn:{} #n:{} #e:{}'.format(str(edge_cls), self.chn_in, edge_kwargs['chn_in'][0],self.n_nodes, self.num_edges))
+            # print('DAGLayer param count: {:.6f}'.format(param_count(self)))
         else:
             self.chn_states = chn_states
             self.edge_cls = edge_cls
@@ -184,8 +183,8 @@ class DAGLayer(nn.Module):
         self.num_edges = num_edges
         self.chn_states = chn_states
         self.chn_out = self.merger_out.chn_out(chn_states)
-        print('DAGLayer: etype:{} chn_in:{} #n:{} #e:{}'.format(str(edge_cls), self.chn_in, self.n_nodes, self.num_edges))
-        print('DAGLayer param count: {:.6f}'.format(param_count(self)))
+        # print('DAGLayer: etype:{} chn_in:{} #n:{} #e:{}'.format(str(edge_cls), self.chn_in, self.n_nodes, self.num_edges))
+        # print('DAGLayer param count: {:.6f}'.format(param_count(self)))
 
 
 class TreeLayer(nn.Module):
@@ -247,7 +246,7 @@ class TreeLayer(nn.Module):
         else:
             self.merge_filter = None
         
-        print('TreeLayer: etype:{} ctype:{} chn_in:{} #node:{} #p:{:.6f}'.format(str(edge_cls), str(child_cls), chn_in, self.n_nodes, param_count(self)))
+        # print('TreeLayer: etype:{} ctype:{} chn_in:{} #node:{} #p:{:.6f}'.format(str(edge_cls), str(child_cls), chn_in, self.n_nodes, param_count(self)))
     
     def forward(self, x):
         x = [x] if not isinstance(x, list) else x

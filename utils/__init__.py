@@ -53,15 +53,14 @@ def check_config(hp, name):
     defaults = {
         'search.data.dloader.cutout': 0,
         'augment.data.dloader.cutout': 16,
-        'search.data.dloader.jitter': False,
-        'augment.data.dloader.jitter': False,
-        'search.a_optim.betas': (0.9, 0.999),
+        'search.data.dloader.jitter': True,
+        'augment.data.dloader.jitter': True,
         'search.plot': False,
         'search.aux_weight': 0.0,
         'augment.aux_weight': 0.0,
         'model.ops_order': 'act_weight_bn',
         'model.sepconv_stack': False,
-        'model.label_smoothing': False,
+        'model.label_smoothing': 0.1,
         'model.affine': False,
         'log.writer': False,
     }

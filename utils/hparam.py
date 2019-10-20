@@ -1,20 +1,6 @@
 # -*- coding: utf-8 -*-
 # modified from https://github.com/HarryVolek/PyTorch_Speaker_Verification
-
 import yaml
-
-# def load_hparam_str(hp_str):
-#     os.makedirs('config', exist_ok=True)
-#     path = os.path.join('config', 'temp-restore.yaml')
-#     with open(path, 'w') as f:
-#         f.write(hp_str)
-#     return HParam(path)
-
-
-# def to_string(hp):
-#     with open(args.config, 'r') as f:
-#         hp_str = ''.join(f.readlines())
-
 
 def load_hparam(filename):
     stream = open(filename, 'r')
@@ -25,7 +11,6 @@ def load_hparam(filename):
             hparam_dict[k] = v
     return hparam_dict
 
-
 def merge_dict(user, default):
     if isinstance(user, dict) and isinstance(default, dict):
         for k, v in default.items():
@@ -34,7 +19,6 @@ def merge_dict(user, default):
             else:
                 user[k] = merge_dict(user[k], v)
     return user
-
 
 class Dotdict(dict):
     """

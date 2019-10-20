@@ -40,7 +40,7 @@ search:
   warmup_epochs: 50
   epochs: 200
   print_freq: 200
-  save_freq: 100
+  save_freq: 0
   plot_path: './searchs'
   gt_file: './searchs'
 ---
@@ -72,7 +72,7 @@ augment:
   drop_path_prob: 0.0
   w_grad_clip: 0.0
   print_freq: 200
-  save_freq: 100
+  save_freq: 0
 ---
 model:
   type: 'proxyless-nas'
@@ -94,7 +94,6 @@ model:
   sepconv_stack: False
   affine: False
   samples: 1
-  w_latency: 0
   label_smoothing: 0.1
   verbose: False
 ---
