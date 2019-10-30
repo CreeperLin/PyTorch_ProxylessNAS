@@ -75,7 +75,7 @@ def search(out_dir, chkpt_path, w_train_loader, a_train_loader, model, arch, wri
 
             # validation
             cur_step = (epoch+1) * len(w_train_loader)
-            top1 = validate(valid_loader, model, writer, logger, epoch, tot_epochs, device, cur_step, config)
+            top1 = validate(valid_loader, model, writer, logger, epoch, tot_epochs, cur_step, device, config)
 
             print("")
     except KeyboardInterrupt:
