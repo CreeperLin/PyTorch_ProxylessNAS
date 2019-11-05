@@ -33,6 +33,10 @@ class NASModule(nn.Module):
             NASModule.new_shared_p = False
         NASModule.add_module(self, self.id, self.pid)
     
+    @property
+    def arch_param(self):
+        return NASModule._params[self.pid]
+    
     @staticmethod
     def nasmod_state_dict():
         return {
@@ -61,7 +65,7 @@ class NASModule(nn.Module):
     
     @staticmethod
     def get_dev_id(index):
-        return '_' if index is None else str(index)
+        return 'cpu' if index is None else 'cuda:{}'.format(index)
 
     @staticmethod
     def get_new_id():
@@ -169,9 +173,6 @@ class NASModule(nn.Module):
         for pid in pmap:
             for mid in pmap[pid]:
                 getattr(mmap[mid], func)(NASModule._params[pid], **kwargs)
-
-    def get_param(self):
-        return NASModule._params[self.pid]
     
     def nas_state_dict(self):
         if not self.id in NASModule._module_state_dict:
@@ -246,7 +247,7 @@ class DARTSMixedOp(NASModule):
     def to_genotype(self, k, ops):
         assert ops[-1] == 'none'
         if self.pid == -1: return -1, [None]
-        w = F.softmax(self.get_param().detach(), dim=-1)
+        w = F.softmax(self.arch_param.detach(), dim=-1)
         w_max, prim_idx = torch.topk(w[:-1], 1)
         gene = [gt.abbr[ops[i]] for i in prim_idx]
         if gene == []: return -1, [None]
@@ -320,7 +321,6 @@ class BinGateMixedOp(NASModule):
         self.swap_ops(smp, x.device)
         m_out = sum(self._ops[i](x) for i in smp)
         self.set_state('m_out'+dev_id, m_out)
-        tprof.add_acc_item('model_'+dev_id, mid)
         return m_out
 
     def swap_ops(self, samples, device):
@@ -364,7 +364,7 @@ class BinGateMixedOp(NASModule):
     
     def to_genotype(self, k, ops):
         if self.pid == -1: return -1, [None]
-        w = F.softmax(self.get_param().detach(), dim=-1)
+        w = F.softmax(self.arch_param.detach(), dim=-1)
         w_max, prim_idx = torch.topk(w, 1)
         gene = [gt.abbr[ops[i]] for i in prim_idx]
         if gene == []: return -1, [None]
@@ -416,6 +416,16 @@ class NASController(nn.Module):
         return nn.parallel.gather(outputs, self.device_ids[0])
     
     def loss(self, X, y, aux_weight=0):
+        ret = self.forward(X)
+        if isinstance(ret, tuple):
+            logits, aux_logits = ret
+            aux_loss = aux_weight * self.criterion(aux_logits, y)
+        else:
+            logits = ret
+            aux_loss = 0
+        return self.criterion(logits, y) + aux_loss
+
+    def loss_logits(self, X, y, aux_weight=0):
         ret = self.forward(X)
         if isinstance(ret, tuple):
             logits, aux_logits = ret

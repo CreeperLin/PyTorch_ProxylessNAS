@@ -41,9 +41,6 @@ def search(out_dir, chkpt_path, w_train_loader, a_train_loader, model, arch, wri
     w_optim = utils.get_optim(model.weights(), config.w_optim)
     a_optim = utils.get_optim(model.alphas(), config.a_optim)
 
-    warmup_lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        w_optim, config.warmup_epochs, eta_min=config.w_optim.lr_min)
-
     init_epoch = -1
 
     if chkpt_path is not None:
@@ -63,26 +60,29 @@ def search(out_dir, chkpt_path, w_train_loader, a_train_loader, model, arch, wri
     # warmup training loop
     logger.info('begin warmup training')
     try:
+        if config.warmup_epochs > 0:
+            warmup_lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                                    w_optim, config.warmup_epochs, eta_min=config.w_optim.lr_min)
+            last_epoch = 0
+        else:
+            last_epoch = -1
+
         tot_epochs = config.warmup_epochs
         for epoch in itertools.count(init_epoch+1):
             if epoch == tot_epochs: break
-
-            warmup_lr_scheduler.step()
             lr = warmup_lr_scheduler.get_lr()[0]
-
             # training
             train(w_train_loader, None, model, writer, logger, architect, w_optim, a_optim, lr, epoch, tot_epochs, device, config)
-
             # validation
             cur_step = (epoch+1) * len(w_train_loader)
             top1 = validate(valid_loader, model, writer, logger, epoch, tot_epochs, cur_step, device, config)
-
+            warmup_lr_scheduler.step()
             print("")
     except KeyboardInterrupt:
         print('skipped')
     
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        w_optim, config.epochs, eta_min=config.w_optim.lr_min, last_epoch=0)
+        w_optim, config.epochs, eta_min=config.w_optim.lr_min, last_epoch=last_epoch)
     
     save_checkpoint(out_dir, model, w_optim, a_optim, lr_scheduler, init_epoch, logger)
     save_genotype(out_dir, model.genotype(), init_epoch, logger)
@@ -93,37 +93,28 @@ def search(out_dir, chkpt_path, w_train_loader, a_train_loader, model, arch, wri
     tot_epochs = config.epochs
     for epoch in itertools.count(init_epoch+1):
         if epoch == tot_epochs: break
-
-        lr_scheduler.step()
         lr = lr_scheduler.get_lr()[0]
-
         model.print_alphas(logger)
-
         # training
         train(w_train_loader, a_train_loader, model, writer, logger, architect, w_optim, a_optim, lr, epoch, tot_epochs, device, config)
-
         # validation
         cur_step = (epoch+1) * len(w_train_loader)
         top1 = validate(valid_loader, model, writer, logger, epoch, tot_epochs, cur_step, device, config) 
-
         # genotype
         genotype = model.genotype()
         save_genotype(out_dir, genotype, epoch, logger)
-        
-        # genotype as a image
+        # genotype as image
         if config.plot:
             for i, dag in enumerate(model.dags()):
                 plot_path = os.path.join(config.plot_path, "EP{:02d}".format(epoch+1))
                 caption = "Epoch {} - DAG {}".format(epoch+1, i)
                 plot(genotype.dag[i], dag, plot_path + "-dag_{}".format(i), caption)
-        
         if best_top1 < top1:
             best_top1 = top1
             best_genotype = genotype
-
         if config.save_freq != 0 and epoch % config.save_freq == 0:
             save_checkpoint(out_dir, model, w_optim, a_optim, lr_scheduler, epoch, logger)
-
+        lr_scheduler.step()
         print("")
         
     logger.info("Final best Prec@1 = {:.4%}".format(best_top1))
@@ -212,7 +203,7 @@ def train(train_loader, valid_loader, model, writer, logger, architect, w_optim,
         # phase 1. child network step (w)
         w_optim.zero_grad()
         tprof.timer_start('train')
-        loss, logits = model.loss(trn_X, trn_y, config.aux_weight)
+        loss, logits = model.loss_logits(trn_X, trn_y, config.aux_weight)
         tprof.timer_stop('train')
         loss.backward()
         # gradient clipping
@@ -269,9 +260,8 @@ def validate(valid_loader, model, writer, logger, epoch, tot_epochs, cur_step, d
             N = X.size(0)
 
             tprof.timer_start('validate')
-            logits = model(X)
+            loss, logits = model.loss_logits(X, y, config.aux_weight)
             tprof.timer_stop('validate')
-            loss = model.criterion(logits, y)
 
             prec1, prec5 = utils.accuracy(logits, y, topk=(1, 5))
             losses.update(loss.item(), N)

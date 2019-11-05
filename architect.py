@@ -31,7 +31,7 @@ class DARTSArchitect():
             w_optim: weights optimizer
         """
         # forward & calc loss
-        loss, _ = self.net.loss(trn_X, trn_y) # L_trn(w)
+        loss = self.net.loss(trn_X, trn_y) # L_trn(w)
 
         # compute gradient
         gradients = torch.autograd.grad(loss, self.net.weights())
@@ -60,7 +60,7 @@ class DARTSArchitect():
         self.virtual_step(trn_X, trn_y, xi, w_optim)
 
         # calc unrolled loss
-        loss, _ = self.v_net.loss(val_X, val_y) # L_val(w`)
+        loss = self.v_net.loss(val_X, val_y) # L_val(w`)
 
         # compute gradient
         v_alphas = tuple(self.v_net.alphas())
@@ -99,7 +99,7 @@ class DARTSArchitect():
         with torch.no_grad():
             for p, d in zip(self.net.weights(), dw):
                 p -= 2. * eps * d
-        loss = self.net.loss(trn_X, trn_y)
+        loss  = self.net.loss(trn_X, trn_y)
         dalpha_neg = torch.autograd.grad(loss, self.net.alphas()) # dalpha { L_trn(w-) }
 
         # recover w
@@ -136,7 +136,7 @@ class BinaryGateArchitect():
         if self.sample:
             NASModule.param_module_call('sample_ops', n_samples=self.n_samples)
         
-        loss, _ = self.net.loss(val_X, val_y)
+        loss = self.net.loss(val_X, val_y)
 
         m_out_dev = []
         for dev_id in NASModule.get_device():
